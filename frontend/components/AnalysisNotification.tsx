@@ -1,12 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Brain, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp, Cpu } from 'lucide-react';
 
 interface QueueItem {
   projectId: string;
   timestamp: number;
   step: string;
+}
+
+interface ActiveExecution {
+  taskId: string;
+  taskTitle: string;
+  agentType: string;
+  projectId: string;
+  projectName: string;
+  status: 'RUNNING' | 'DONE' | 'ERROR';
+  startedAt: number;
+  currentStep: string;
 }
 
 interface AnalysisNotificationProps {
@@ -15,6 +26,7 @@ interface AnalysisNotificationProps {
 
 export default function AnalysisNotification({ onClose }: AnalysisNotificationProps) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [activeExecutions, setActiveExecutions] = useState<ActiveExecution[]>([]);
   const [currentStep, setCurrentStep] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -28,10 +40,12 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
         if (response.ok) {
           const data = await response.json();
           setIsProcessing(data.isProcessing || false);
+          setActiveExecutions(data.activeExecutions || []);
           const hasQueue = data.queue && data.queue.length > 0;
+          const hasActiveExecutions = data.activeExecutions && data.activeExecutions.length > 0;
           
-          // Show when there's a queue OR when AI is processing
-          if (hasQueue || data.isProcessing) {
+          // Show when there's a queue OR when AI is processing OR when there are active executions
+          if (hasQueue || data.isProcessing || hasActiveExecutions) {
             setQueue(data.queue || []);
             setCurrentStep(data.currentStep || 'Đang xử lý...');
             setVisible(true);
@@ -61,14 +75,18 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
           <div className="flex items-center gap-3">
             <div className="relative">
               <Brain className="w-5 h-5 text-indigo-400" />
-              {queue.length > 0 && (
+              {(activeExecutions.length > 0 || queue.length > 0) && (
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-400 rounded-full animate-pulse-slow" />
               )}
             </div>
             <div>
               <p className="font-medium text-sm text-indigo-400">AI Analysis</p>
               <p className="text-xs text-zinc-400">
-                {isProcessing ? '⚡ Đang xử lý' : `${queue.length} trong hàng đợi`}
+                {activeExecutions.length > 0 
+                  ? `${activeExecutions.length} đang chạy` 
+                  : isProcessing 
+                    ? '⚡ Đang xử lý' 
+                    : `${queue.length} trong hàng đợi`}
               </p>
             </div>
           </div>
@@ -82,14 +100,47 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
         {/* Content */}
         {isExpanded && (
           <div className="px-4 py-3 border-t border-zinc-800">
-            {/* Current Step */}
-            <div className="mb-3">
-              <p className="text-xs text-zinc-500 mb-1">Đang xử lý:</p>
-              <p className="text-sm text-white font-medium flex items-center gap-2">
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse-slow" />
-                {currentStep || 'Đang chờ...'}
-              </p>
-            </div>
+            {/* Active Executions */}
+            {activeExecutions.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-zinc-500 mb-2 flex items-center gap-1">
+                  <Cpu className="w-3 h-3" /> Đang thực thi:
+                </p>
+                <div className="space-y-2">
+                  {activeExecutions.map((exec) => (
+                    <div key={exec.taskId} className="bg-zinc-800/50 rounded-lg p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-indigo-400">
+                          [{exec.agentType}]
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {Math.floor((Date.now() - exec.startedAt) / 1000)}s
+                        </span>
+                      </div>
+                      <p className="text-sm text-white mt-1">{exec.taskTitle}</p>
+                      <p className="text-xs text-zinc-400 mt-1 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                        {exec.currentStep}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Project: {exec.projectName}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Current Step (for queue processing) */}
+            {(isProcessing && activeExecutions.length === 0) && (
+              <div className="mb-3">
+                <p className="text-xs text-zinc-500 mb-1">Đang xử lý:</p>
+                <p className="text-sm text-white font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse-slow" />
+                  {currentStep || 'Đang chờ...'}
+                </p>
+              </div>
+            )}
 
             {/* Queue List */}
             {queue.length > 0 && (

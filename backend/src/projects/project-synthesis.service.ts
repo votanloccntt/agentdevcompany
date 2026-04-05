@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
 import { OllamaService } from "../ollama/ollama.service";
 import { PrismaService } from "../prisma.service";
+import { ExecutionStateService } from "../execution-state/execution-state.service";
 import { AgentType } from "@prisma/client";
 
 interface ParsedTask {
@@ -28,6 +29,7 @@ export class ProjectSynthesisService implements OnModuleInit {
   constructor(
     private ollama: OllamaService,
     private prisma: PrismaService,
+    private executionState: ExecutionStateService,
   ) {}
 
   onModuleInit() {
@@ -44,6 +46,7 @@ export class ProjectSynthesisService implements OnModuleInit {
       isProcessing: this.isProcessing,
       currentStep: this.currentStep,
       queueSize: this.analysisQueue.length,
+      activeExecutions: this.executionState.getActiveExecutions(),
     };
   }
 

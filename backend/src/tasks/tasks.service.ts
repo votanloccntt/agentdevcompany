@@ -6,6 +6,7 @@ import {
 import { PrismaService } from "../prisma.service";
 import { OllamaService } from "../ollama/ollama.service";
 import { AGENT_PROMPTS, AgentType } from "../agents/prompts";
+import { ExecutionStateService } from "../execution-state/execution-state.service";
 import { Task, Status } from "@prisma/client";
 
 @Injectable()
@@ -13,6 +14,7 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private ollama: OllamaService,
+    private executionState: ExecutionStateService,
   ) {}
 
   async findAll(projectId: string, userId: string): Promise<Task[]> {
@@ -103,6 +105,16 @@ export class TasksService {
     const agent = AGENT_PROMPTS[task.agentType];
     console.log(`[TasksService] Agent prompt loaded, systemPrompt length: ${agent.systemPrompt.length}`);
 
+    // Track execution
+    this.executionState.startExecution({
+      taskId: task.id,
+      taskTitle: task.title,
+      agentType: task.agentType,
+      projectId: task.projectId,
+      projectName: task.project.name,
+      currentStep: `Đang xử lý câu hỏi...`,
+    });
+
     // Save user message
     await this.prisma.message.create({
       data: {
@@ -169,6 +181,7 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
     // Non-streaming response
     const enhancedPrompt = `${agent.systemPrompt}\n\n${projectContext}`;
     console.log(`[TasksService] Calling Ollama.chat()...`);
+    this.executionState.updateStep(taskId, `AI đang tìm câu trả lời...`);
     const response = await this.ollama.chat(ollamaMessages, enhancedPrompt);
     console.log(`[TasksService] Ollama returned ${response.length} chars`);
 
@@ -186,6 +199,9 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
       where: { id: taskId },
       data: { status: "DONE", result: response },
     });
+
+    // Complete execution tracking
+    this.executionState.completeExecution(taskId, 'DONE');
 
     // Return updated history
     const updatedHistory = await this.prisma.message.findMany({

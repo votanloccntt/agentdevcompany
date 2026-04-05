@@ -8,6 +8,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { AgentsModule } from './agents/agents.module';
 import { OllamaModule } from './ollama/ollama.module';
 import { TestModule } from './test/test.module';
+import { ExecutionStateModule } from './execution-state/execution-state.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TestModule } from './test/test.module';
     AgentsModule,
     OllamaModule,
     TestModule,
+    ExecutionStateModule,
   ],
 })
 export class AppModule {}
