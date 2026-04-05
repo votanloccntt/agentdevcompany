@@ -97,8 +97,11 @@ export class TasksService {
     userMessage: string,
     userId: string,
   ): Promise<{ messages: any[]; response: string }> {
+    console.log(`[TasksService] chat() called for task ${taskId}`);
     const task = await this.findOne(taskId, userId);
+    console.log(`[TasksService] Task found: ${task.title}, agentType: ${task.agentType}`);
     const agent = AGENT_PROMPTS[task.agentType];
+    console.log(`[TasksService] Agent prompt loaded, systemPrompt length: ${agent.systemPrompt.length}`);
 
     // Save user message
     await this.prisma.message.create({
@@ -165,7 +168,9 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
 
     // Non-streaming response
     const enhancedPrompt = `${agent.systemPrompt}\n\n${projectContext}`;
+    console.log(`[TasksService] Calling Ollama.chat()...`);
     const response = await this.ollama.chat(ollamaMessages, enhancedPrompt);
+    console.log(`[TasksService] Ollama returned ${response.length} chars`);
 
     // Create and save agent message
     const agentMessage = await this.prisma.message.create({

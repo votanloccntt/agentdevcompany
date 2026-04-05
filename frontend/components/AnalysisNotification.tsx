@@ -16,6 +16,7 @@ interface AnalysisNotificationProps {
 export default function AnalysisNotification({ onClose }: AnalysisNotificationProps) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [currentStep, setCurrentStep] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const [visible, setVisible] = useState(false);
 
@@ -26,12 +27,16 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
         const response = await fetch('http://localhost:5000/api/analysis-queue/status');
         if (response.ok) {
           const data = await response.json();
-          if (data.queue && data.queue.length > 0) {
-            setQueue(data.queue);
+          setIsProcessing(data.isProcessing || false);
+          const hasQueue = data.queue && data.queue.length > 0;
+          
+          // Show when there's a queue OR when AI is processing
+          if (hasQueue || data.isProcessing) {
+            setQueue(data.queue || []);
             setCurrentStep(data.currentStep || 'Đang xử lý...');
             setVisible(true);
           } else if (visible) {
-            // Queue is empty, hide after 3 seconds
+            // Queue is empty and not processing, hide after 3 seconds
             setTimeout(() => setVisible(false), 3000);
           }
         }
@@ -63,7 +68,7 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
             <div>
               <p className="font-medium text-sm text-indigo-400">AI Analysis</p>
               <p className="text-xs text-zinc-400">
-                {queue.length > 0 ? `${queue.length} trong hàng đợi` : 'Đang xử lý'}
+                {isProcessing ? '⚡ Đang xử lý' : `${queue.length} trong hàng đợi`}
               </p>
             </div>
           </div>
