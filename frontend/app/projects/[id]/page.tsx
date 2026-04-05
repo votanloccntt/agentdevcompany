@@ -58,6 +58,7 @@ export default function ProjectDetailPage() {
   const [creating, setCreating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
+  const [analysisProjectId, setAnalysisProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -102,7 +103,10 @@ export default function ProjectDetailPage() {
   };
 
   const handleReanalyze = async () => {
+    if (!project) return;
+    
     setAnalyzing(true);
+    setAnalysisProjectId(project.id);
     setAnalysisStep('Đang xóa dữ liệu cũ...');
     
     try {
@@ -126,8 +130,18 @@ export default function ProjectDetailPage() {
     } finally {
       setAnalyzing(false);
       setAnalysisStep('');
+      setAnalysisProjectId(null);
     }
   };
+
+
+  // Check if this project is being analyzed when page loads
+  useEffect(() => {
+    if (params.id && teamChat && teamChat.messages && teamChat.messages.length > 0) {
+      // Project has been analyzed before
+      // Could restore state from localStorage if needed
+    }
+  }, [params.id, teamChat]);
 
   if (loading) {
     return (
@@ -222,16 +236,14 @@ export default function ProjectDetailPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            {teamChat && teamChat.messages && teamChat.messages.length > 0 && (
-              <button
-                onClick={handleReanalyze}
-                disabled={analyzing}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Brain className={`w-4 h-4 ${analyzing ? 'animate-pulse' : ''}`} />
-                {analyzing ? 'Đang phân tích...' : 'Phân tích lại'}
-              </button>
-            )}
+            <button
+              onClick={handleReanalyze}
+              disabled={analyzing}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Brain className={`w-4 h-4 ${analyzing ? 'animate-pulse' : ''}`} />
+              {analyzing ? 'Đang phân tích...' : 'Phân tích lại'}
+            </button>
             <button
               onClick={() => setShowCreate(true)}
               className="btn-primary flex items-center gap-2"
