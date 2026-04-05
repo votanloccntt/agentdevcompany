@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Send, Bot, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Send, Bot, User as UserIcon, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { tasksAPI } from "@/lib/api";
 
@@ -38,7 +38,7 @@ export default function TaskChatPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamedContent]);
+  }, [messages]);
 
   const fetchTask = async (id: string) => {
     try {
@@ -69,13 +69,12 @@ export default function TaskChatPage() {
 
     try {
       const result = await tasksAPI.chat(params.taskId as string, userMessage);
-      setMessages(result.data.messages);
+      setMessages(result.data.messages || []);
     } catch (err) {
       console.error("Failed to send message", err);
       const errorMsg = {
         role: "AGENT",
-        content:
-          "Xin lỗi, đã xảy ra lỗi. Vui lòng đảm bảo Ollama đang chạy.",
+        content: "Xin lỗi, đã xảy ra lỗi. Vui lòng đảm bảo Ollama đang chạy.",
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -94,7 +93,7 @@ export default function TaskChatPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-zinc-400">Loading...</div>
+        <Loader2 className="w-8 h-8 animate-spin text-zinc-400" />
       </div>
     );
   }
@@ -146,10 +145,10 @@ export default function TaskChatPage() {
             <div className="text-center py-12">
               <Bot className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
               <h2 className="text-xl font-medium mb-2">
-                Start the conversation
+                Bắt đầu cuộc trò chuyện
               </h2>
               <p className="text-zinc-400">
-                Send a message to start chatting with the {task.agentType} Agent
+                Gửi tin nhắn để chat với {task.agentType} Agent
               </p>
             </div>
           )}
@@ -189,8 +188,8 @@ export default function TaskChatPage() {
             </div>
           ))}
 
-          {/* Streaming message */}
-          {streaming && streamedContent && (
+          {/* Loading indicator */}
+          {sending && (
             <div className="flex gap-4">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -199,24 +198,10 @@ export default function TaskChatPage() {
                 <Bot className="w-4 h-4" style={{ color: agentColor }} />
               </div>
               <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-zinc-800">
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>{streamedContent}</ReactMarkdown>
-                </div>
-                <span className="animate-pulse">▍</span>
-              </div>
-            </div>
-          )}
-
-          {sending && !streamedContent && (
-            <div className="flex gap-4">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: `${agentColor}20` }}
-              >
-                <Bot className="w-4 h-4" style={{ color: agentColor }} />
-              </div>
-              <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-zinc-800">
-                <span className="animate-pulse text-zinc-400">Thinking...</span>
+                <span className="animate-pulse text-zinc-400 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang xử lý...
+                </span>
               </div>
             </div>
           )}
@@ -230,11 +215,10 @@ export default function TaskChatPage() {
         <div className="max-w-4xl mx-auto">
           <div className="flex gap-4">
             <textarea
-              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Message ${task.agentType} Agent...`}
+              placeholder={`Nhắn tin cho ${task.agentType} Agent...`}
               className="input-field flex-1 resize-none h-12 py-3"
               rows={1}
               disabled={sending}
@@ -248,7 +232,7 @@ export default function TaskChatPage() {
             </button>
           </div>
           <p className="text-zinc-500 text-xs mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line
+            Nhấn Enter để gửi, Shift+Enter để xuống dòng
           </p>
         </div>
       </footer>
