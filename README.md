@@ -1,190 +1,126 @@
-# 🤖 Web Agent Platform
+# 🤖 AI Development Team - Multi-Agent Web Platform
 
-Multi-Agent AI Platform với 5 chuyên gia AI: **PM Agent**, **Coding Agent**, **QA Agent**, **UX Agent**, **Data Agent**.
+Nền tảng quản lý dự án với đội ngũ AI Agents (PM, Coding, QA, UX, Data) hoạt động như một team thực thụ.
 
-## 🏗️ Tech Stack
+![Tech Stack](https://img.shields.io/badge/Stack-Next.js%2014%2B%20|%20NestJS%10%2B%20|%20PostgreSQL%16%2B%20|%20Ollama-glimmer)
 
-- **Frontend**: Next.js 14 + TypeScript + TailwindCSS
-- **Backend**: NestJS + Prisma + PostgreSQL
-- **LLM**: Ollama (local, llama3.2)
-- **Auth**: JWT
+## ✨ Tính năng
 
-## 🚀 Quick Start
+- **🧠 AI Development Team** - 5 AI agents chuyên biệt phối hợp với nhau
+- **📋 Project Management** - Tạo project, tự động phân công tasks
+- **💬 Team Chat** - Chat với toàn bộ team hoặc từng agent riêng
+- **📊 Progress Tracker** - Theo dõi tiến độ dự án trực quan
+- **🔗 Project Context** - Agents có shared context để phối hợp hiệu quả
+- **🌐 100% Local** - Chạy hoàn toàn local với Ollama
 
-### 1. Prerequisites
+## 🛠️ Setup
+
+### Yêu cầu
 
 - Node.js 18+
-- PostgreSQL (running locally or via Docker)
-- Ollama (running at localhost:11434)
+- PostgreSQL (hoặc Docker)
+- [Ollama](https://ollama.ai/) với model `gemma4:latest`
 
-### 2. Setup Ollama
+### 1. Clone & Install
 
 ```bash
-# Install Ollama
-# macOS: brew install ollama
-# Windows: Download from ollama.ai
-
-# Pull llama3.2 model
-ollama pull llama3.2
-
-# Start Ollama server (usually auto-starts)
-ollama serve
+cd web-agent
+npm install
 ```
 
-### 3. Database Setup
+### 2. Setup Database
 
 ```bash
-# Create PostgreSQL database
+# Tạo database PostgreSQL
 createdb web_agent
 
-# Or via Docker
-docker run --name postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=web_agent -p 5432:5432 -d postgres
-```
-
-### 4. Backend Setup
-
-```bash
+# Backend: Copy và chỉnh .env
 cd backend
+cp .env.example .env
+# Chỉnh DATABASE_URL và JWT_SECRET trong .env
 
-# Install dependencies
-npm install
-
-# Create .env file
-echo "DATABASE_URL=postgresql://postgres:password@localhost:5432/web_agent" > .env
-echo "JWT_SECRET=your-super-secret-key-change-in-production" >> .env
-
-# Generate Prisma client & migrate
-npx prisma generate
-npx prisma migrate dev --name init
-
-# Start backend
-npm run start:dev
+# Chạy migrations
+npx prisma migrate dev
 ```
 
-Backend running at: http://localhost:4000
-
-### 5. Frontend Setup
+### 3. Pull Ollama Model
 
 ```bash
+ollama pull gemma4:latest
+```
+
+### 4. Chạy Ứng dụng
+
+```bash
+# Terminal 1: Backend (port 5000)
+cd backend
+npm run dev
+
+# Terminal 2: Frontend (port 3000)
 cd frontend
-
-# Install dependencies
-npm install
-
-# Start frontend
 npm run dev
 ```
 
-Frontend running at: http://localhost:3000
+### 5. Mở trình duyệt
 
-## 📁 Project Structure
+```
+http://localhost:3000
+```
+
+## 📁 Cấu trúc dự án
 
 ```
 web-agent/
-├── backend/              # NestJS API
-│   ├── prisma/           # Database schema
+├── backend/           # NestJS API
 │   ├── src/
-│   │   ├── auth/         # Authentication (JWT)
-│   │   ├── users/        # User management
-│   │   ├── projects/     # Project CRUD
-│   │   ├── tasks/        # Task management
-│   │   ├── agents/       # Agent definitions & prompts
-│   │   └── ollama/       # Ollama integration
-│   └── package.json
-├── frontend/             # Next.js app
-│   ├── app/
-│   │   ├── page.tsx      # Dashboard
-│   │   ├── login/        # Login page
-│   │   ├── register/     # Register page
-│   │   ├── projects/     # Projects pages
-│   │   └── agents/       # Direct agent chat
-│   ├── components/        # UI components
-│   └── package.json
-└── README.md
+│   │   ├── agents/          # 5 AI Agents
+│   │   ├── auth/             # JWT Authentication
+│   │   ├── ollama/           # Ollama Integration
+│   │   ├── projects/         # Projects & Team Chat
+│   │   └── tasks/            # Tasks Management
+│   └── prisma/
+│       └── schema.prisma     # Database Schema
+├── frontend/          # Next.js 14 App
+│   └── app/
+│       ├── projects/         # Project pages
+│       ├── agents/           # Agent pages
+│       └── login/            # Auth pages
+└── SPEC.md            # Project Specification
 ```
 
-## 🎯 Features
+## 👥 AI Agents
 
-### Dashboard
-- Stats overview (projects, tasks, completed)
-- Quick actions
-- Recent projects
-- Agent showcase
+| Agent | Màu | Chuyên môn |
+|-------|-----|------------|
+| 🔵 PM Agent | Xanh dương | Quản lý dự án, yêu cầu, timeline |
+| 🟢 Coding Agent | Xanh lá | Full Stack Developer |
+| 🟠 QA Agent | Cam | Quality Assurance, Testing |
+| 🩷 UX Agent | Hồng | UX Design, Accessibility |
+| 🔵 Data Agent | Cyan | Data Engineering |
 
-### Projects
-- Create/edit/delete projects
-- Each project has its own tasks
+## 🔧 Environment Variables
 
-### Tasks
-- Create tasks with specific agent type
-- Real-time chat with streaming responses
-- Conversation history
+### Backend (.env)
 
-### Agents
-Each agent is a specialized AI:
-
-| Agent | Color | Role |
-|-------|-------|------|
-| PM Agent | 🔵 Blue | Project management, requirements |
-| Coding Agent | 🟢 Green | Full-stack development |
-| QA Agent | 🟠 Orange | Testing, quality assurance |
-| UX Agent | 🩷 Pink | User experience design |
-| Data Agent | 🔵 Cyan | Data engineering, analytics |
-
-## 🔌 API Endpoints
-
-### Auth
-- `POST /api/auth/register` - Register user
-- `POST /api/auth/login` - Login (returns JWT)
-
-### Projects
-- `GET /api/projects` - List user's projects
-- `POST /api/projects` - Create project
-- `GET /api/projects/:id` - Get project details
-- `PUT /api/projects/:id` - Update project
-- `DELETE /api/projects/:id` - Delete project
-
-### Tasks
-- `GET /api/projects/:projectId/tasks` - List tasks
-- `POST /api/projects/:projectId/tasks` - Create task
-- `GET /api/tasks/:id` - Get task + messages
-- `POST /api/tasks/:id/chat/stream` - Chat (streaming)
-
-### Agents
-- `GET /api/agents` - List all agents
-- `POST /api/agents/chat/stream` - Direct agent chat
-
-## 🎨 Design
-
-- Dark theme (Linear/Vercel inspired)
-- Agent-specific accent colors
-- Smooth animations
-- Responsive layout
-
-## 🔧 Troubleshooting
-
-### Ollama not responding
-```bash
-# Check if Ollama is running
-curl http://localhost:11434/api/tags
-
-# If not, start it
-ollama serve
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/web_agent"
+JWT_SECRET="your-super-secret-key-change-this"
+OLLAMA_BASE_URL="http://localhost:11434"
+OLLAMA_MODEL="gemma4:latest"
+PORT=5000
 ```
 
-### Database connection failed
-```bash
-# Check PostgreSQL is running
-docker ps  # if using Docker
+## 🚀 Workflow
 
-# Or check local PostgreSQL
-pg_isready
+```
+Tạo Project → PM Agent phân tích & phân công → Team Chat → Hoàn thành Task
 ```
 
-### Port already in use
-- Backend: 4000
-- Frontend: 3000
-- Ollama: 11434
+1. **Tạo Project** - PM Agent tự động phân tích
+2. **Tasks được phân công** - Mỗi agent có task cụ thể
+3. **Team Chat** - Chat với toàn bộ team
+4. **Progress Tracker** - Theo dõi tiến độ
+5. **Context Sharing** - Agents biết nhau đang làm gì
 
 ## 📝 License
 

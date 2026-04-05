@@ -45,7 +45,21 @@ export class TasksController {
     @Request() req,
   ) {
     const { stream } = await this.tasksService.chat(id, dto.message, req.user.id);
-    return new Response(stream, {
+    
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+          controller.close();
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
+
+    return new Response(readable, {
       headers: {
         'Content-Type': 'text/plain',
         'Cache-Control': 'no-cache',

@@ -3,7 +3,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
+import { ProjectSynthesisService } from './project-synthesis.service';
 import { PrismaService } from '../prisma.service';
+import { OllamaService } from '../ollama/ollama.service';
 
 @Module({
   imports: [
@@ -13,7 +15,7 @@ import { PrismaService } from '../prisma.service';
     }),
   ],
   controllers: [ProjectsController],
-  providers: [ProjectsService, PrismaService],
+  providers: [ProjectsService, ProjectSynthesisService, PrismaService, OllamaService],
   exports: [ProjectsService],
 })
 export class ProjectsModule {}

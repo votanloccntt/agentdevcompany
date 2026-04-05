@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Send, Bot, User as UserIcon } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { tasksAPI } from '@/lib/api';
+import { useEffect, useState, useRef } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Send, Bot, User as UserIcon } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { tasksAPI } from "@/lib/api";
 
 const AGENT_COLORS: Record<string, string> = {
-  PM: '#3b82f6',
-  CODING: '#22c55e',
-  QA: '#f97316',
-  UX: '#ec4899',
-  DATA: '#06b6d4',
+  PM: "#3b82f6",
+  CODING: "#22c55e",
+  QA: "#f97316",
+  UX: "#ec4899",
+  DATA: "#06b6d4",
 };
 
 export default function TaskChatPage() {
@@ -20,18 +20,18 @@ export default function TaskChatPage() {
   const params = useParams();
   const [task, setTask] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [streamedContent, setStreamedContent] = useState('');
+  const [streamedContent, setStreamedContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
     if (params.taskId) {
@@ -40,7 +40,7 @@ export default function TaskChatPage() {
   }, [params.taskId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamedContent]);
 
   const fetchTask = async (id: string) => {
@@ -49,7 +49,7 @@ export default function TaskChatPage() {
       setTask(res.data);
       setMessages(res.data.messages || []);
     } catch (err) {
-      console.error('Failed to fetch task', err);
+      console.error("Failed to fetch task", err);
     } finally {
       setLoading(false);
     }
@@ -59,31 +59,38 @@ export default function TaskChatPage() {
     if (!input.trim() || sending) return;
 
     const userMessage = input.trim();
-    setInput('');
+    setInput("");
     setSending(true);
     setStreaming(true);
-    setStreamedContent('');
+    setStreamedContent("");
 
     // Add user message immediately
-    const userMsg = { role: 'USER', content: userMessage, createdAt: new Date().toISOString() };
+    const userMsg = {
+      role: "USER",
+      content: userMessage,
+      createdAt: new Date().toISOString(),
+    };
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:4000/api/tasks/' + params.taskId + '/chat/stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        "http://localhost:5000/api/tasks/" + params.taskId + "/chat/stream",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ message: userMessage }),
         },
-        body: JSON.stringify({ message: userMessage }),
-      });
+      );
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) throw new Error("Failed to send message");
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let fullContent = '';
+      let fullContent = "";
 
       if (reader) {
         while (true) {
@@ -97,22 +104,31 @@ export default function TaskChatPage() {
       }
 
       // Add agent message
-      const agentMsg = { role: 'AGENT', content: fullContent, createdAt: new Date().toISOString() };
+      const agentMsg = {
+        role: "AGENT",
+        content: fullContent,
+        createdAt: new Date().toISOString(),
+      };
       setMessages((prev) => [...prev, agentMsg]);
     } catch (err) {
-      console.error('Failed to send message', err);
+      console.error("Failed to send message", err);
       // Add error message
-      const errorMsg = { role: 'AGENT', content: 'Sorry, I encountered an error. Please make sure Ollama is running.', createdAt: new Date().toISOString() };
+      const errorMsg = {
+        role: "AGENT",
+        content:
+          "Sorry, I encountered an error. Please make sure Ollama is running.",
+        createdAt: new Date().toISOString(),
+      };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setSending(false);
       setStreaming(false);
-      setStreamedContent('');
+      setStreamedContent("");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -134,14 +150,17 @@ export default function TaskChatPage() {
     );
   }
 
-  const agentColor = AGENT_COLORS[task.agentType] || '#6366f1';
+  const agentColor = AGENT_COLORS[task.agentType] || "#6366f1";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link href={`/projects/${params.id}`} className="text-zinc-400 hover:text-white transition-colors">
+          <Link
+            href={`/projects/${params.id}`}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-3">
@@ -155,7 +174,9 @@ export default function TaskChatPage() {
             </div>
             <div>
               <h1 className="font-semibold">{task.title}</h1>
-              <p className="text-zinc-400 text-sm">{task.description || 'Chat with agent'}</p>
+              <p className="text-zinc-400 text-sm">
+                {task.description || "Chat with agent"}
+              </p>
             </div>
           </div>
         </div>
@@ -167,7 +188,9 @@ export default function TaskChatPage() {
           {messages.length === 0 && (
             <div className="text-center py-12">
               <Bot className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-              <h2 className="text-xl font-medium mb-2">Start the conversation</h2>
+              <h2 className="text-xl font-medium mb-2">
+                Start the conversation
+              </h2>
               <p className="text-zinc-400">
                 Send a message to start chatting with the {task.agentType} Agent
               </p>
@@ -175,14 +198,21 @@ export default function TaskChatPage() {
           )}
 
           {messages.map((msg, index) => (
-            <div key={index} className={`flex gap-4 ${msg.role === 'USER' ? 'flex-row-reverse' : ''}`}>
+            <div
+              key={index}
+              className={`flex gap-4 ${msg.role === "USER" ? "flex-row-reverse" : ""}`}
+            >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  msg.role === 'USER' ? 'bg-indigo-500' : ''
+                  msg.role === "USER" ? "bg-indigo-500" : ""
                 }`}
-                style={msg.role === 'AGENT' ? { backgroundColor: `${agentColor}20` } : {}}
+                style={
+                  msg.role === "AGENT"
+                    ? { backgroundColor: `${agentColor}20` }
+                    : {}
+                }
               >
-                {msg.role === 'USER' ? (
+                {msg.role === "USER" ? (
                   <UserIcon className="w-4 h-4 text-white" />
                 ) : (
                   <Bot className="w-4 h-4" style={{ color: agentColor }} />
@@ -190,9 +220,9 @@ export default function TaskChatPage() {
               </div>
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  msg.role === 'USER'
-                    ? 'bg-indigo-500 text-white'
-                    : 'bg-zinc-800 text-zinc-100'
+                  msg.role === "USER"
+                    ? "bg-indigo-500 text-white"
+                    : "bg-zinc-800 text-zinc-100"
                 }`}
               >
                 <div className="prose prose-invert prose-sm max-w-none">

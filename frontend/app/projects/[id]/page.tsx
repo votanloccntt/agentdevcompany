@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare, Users, Brain, Sparkles, TrendingUp, Target } from 'lucide-react';
 import { projectsAPI, tasksAPI } from '@/lib/api';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -12,6 +12,14 @@ const AGENT_COLORS: Record<string, string> = {
   QA: '#f97316',
   UX: '#ec4899',
   DATA: '#06b6d4',
+};
+
+const AGENT_NAMES: Record<string, string> = {
+  PM: 'PM Agent',
+  CODING: 'Coding Agent',
+  QA: 'QA Agent',
+  UX: 'UX Agent',
+  DATA: 'Data Agent',
 };
 
 const STATUS_ICONS: Record<string, any> = {
@@ -28,16 +36,27 @@ const STATUS_COLORS: Record<string, string> = {
   FAILED: 'text-red-400',
 };
 
+interface ProjectPhase {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  status: 'pending' | 'active' | 'completed';
+  color: string;
+}
+
 export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams();
   const [project, setProject] = useState<any>(null);
+  const [teamChat, setTeamChat] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newAgent, setNewAgent] = useState('CODING');
   const [creating, setCreating] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -52,8 +71,12 @@ export default function ProjectDetailPage() {
 
   const fetchProject = async (id: string) => {
     try {
-      const res = await projectsAPI.getOne(id);
-      setProject(res.data);
+      const [projectRes, chatRes] = await Promise.all([
+        projectsAPI.getOne(id),
+        projectsAPI.getProjectChat(id).catch(() => null),
+      ]);
+      setProject(projectRes.data);
+      setTeamChat(chatRes?.data || null);
     } catch (err) {
       console.error('Failed to fetch project', err);
     } finally {
@@ -77,6 +100,18 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleReanalyze = async () => {
+    setAnalyzing(true);
+    try {
+      await projectsAPI.analyze(project.id);
+      await fetchProject(project.id);
+    } catch (err) {
+      console.error('Failed to analyze', err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -93,6 +128,69 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const regularTasks = project.tasks?.filter((t: any) => t.title !== 'Project Team Chat') || [];
+  const lastTeamMsg = teamChat?.messages?.[teamChat.messages.length - 1];
+  
+  // Calculate project progress
+  const totalTasks = regularTasks.length;
+  const completedTasks = regularTasks.filter((t: any) => t.status === 'DONE').length;
+  const inProgressTasks = regularTasks.filter((t: any) => t.status === 'IN_PROGRESS').length;
+  const pendingTasks = regularTasks.filter((t: any) => t.status === 'PENDING').length;
+  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Determine current phase
+  const getProjectPhases = (): ProjectPhase[] => {
+    const hasTeamChat = teamChat && teamChat.messages && teamChat.messages.length > 0;
+    const hasTasks = totalTasks > 0;
+    const hasCompletedTasks = completedTasks > 0;
+    const allTasksDone = totalTasks > 0 && completedTasks === totalTasks;
+
+    return [
+      {
+        id: 'created',
+        name: 'Tạo Dự Án',
+        description: 'Dự án đã được khởi tạo',
+        icon: Target,
+        status: 'completed',
+        color: '#22c55e',
+      },
+      {
+        id: 'analyzing',
+        name: 'PM Phân Tích',
+        description: hasTeamChat ? 'Đã phân tích và lên kế hoạch' : 'Đang chờ PM phân tích...',
+        icon: Brain,
+        status: hasTeamChat ? 'completed' : (analyzing ? 'active' : 'pending'),
+        color: '#3b82f6',
+      },
+      {
+        id: 'tasks',
+        name: 'Phân Công',
+        description: hasTasks ? `${totalTasks} công việc đã được tạo` : 'Chưa có công việc nào',
+        icon: Users,
+        status: hasTasks ? 'completed' : 'pending',
+        color: '#8b5cf6',
+      },
+      {
+        id: 'working',
+        name: 'Đang Làm Việc',
+        description: inProgressTasks > 0 ? `${inProgressTasks} đang thực hiện` : (hasTasks ? 'Sẵn sàng bắt đầu' : 'Chờ phân công'),
+        icon: Sparkles,
+        status: inProgressTasks > 0 ? 'active' : (hasTasks ? 'completed' : 'pending'),
+        color: '#f97316',
+      },
+      {
+        id: 'done',
+        name: 'Hoàn Thành',
+        description: allTasksDone ? 'Tất cả công việc đã hoàn tất!' : `${completedTasks}/${totalTasks} hoàn thành`,
+        icon: TrendingUp,
+        status: allTasksDone ? 'completed' : (hasTasks ? 'active' : 'pending'),
+        color: '#10b981',
+      },
+    ];
+  };
+
+  const phases = getProjectPhases();
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-zinc-800 px-6 py-4">
@@ -106,22 +204,168 @@ export default function ProjectDetailPage() {
               <p className="text-zinc-400 text-sm">{project.description || 'No description'}</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            New Task
-          </button>
+          <div className="flex gap-3">
+            {teamChat && teamChat.messages && teamChat.messages.length > 0 && (
+              <button
+                onClick={handleReanalyze}
+                disabled={analyzing}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Brain className="w-4 h-4" />
+                {analyzing ? 'Đang phân tích...' : 'Phân tích lại'}
+              </button>
+            )}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              New Task
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {project.tasks?.length === 0 ? (
+        {/* Project Progress Tracker */}
+        <div className="card mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-semibold text-lg">Tiến Độ Dự Án</h2>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-2xl font-bold">{progressPercent}%</p>
+                <p className="text-zinc-400 text-sm">Hoàn thành</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Progress Bar */}
+          <div className="h-3 bg-zinc-800 rounded-full mb-6 overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="bg-zinc-900/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-white">{totalTasks}</p>
+              <p className="text-zinc-400 text-sm">Tổng công việc</p>
+            </div>
+            <div className="bg-zinc-900/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-green-400">{completedTasks}</p>
+              <p className="text-zinc-400 text-sm">Hoàn thành</p>
+            </div>
+            <div className="bg-zinc-900/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-orange-400">{inProgressTasks}</p>
+              <p className="text-zinc-400 text-sm">Đang làm</p>
+            </div>
+            <div className="bg-zinc-900/50 rounded-lg p-3">
+              <p className="text-2xl font-bold text-zinc-400">{pendingTasks}</p>
+              <p className="text-zinc-400 text-sm">Chờ xử lý</p>
+            </div>
+          </div>
+
+          {/* Phase Timeline */}
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              {phases.map((phase, index) => {
+                const PhaseIcon = phase.icon;
+                return (
+                  <div key={phase.id} className="flex flex-col items-center relative z-10">
+                    {/* Connector Line */}
+                    {index > 0 && (
+                      <div 
+                        className={`absolute top-5 -left-1/2 w-full h-0.5 ${
+                          phase.status === 'completed' || phases[index - 1].status === 'completed'
+                            ? 'bg-green-500' 
+                            : 'bg-zinc-700'
+                        }`}
+                        style={{ width: '200%', left: '-100%' }}
+                      />
+                    )}
+                    
+                    {/* Icon Circle */}
+                    <div 
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${
+                        phase.status === 'completed' 
+                          ? 'bg-green-500/20' 
+                          : phase.status === 'active' 
+                            ? 'bg-indigo-500/20 ring-2 ring-indigo-500'
+                            : 'bg-zinc-800'
+                      }`}
+                    >
+                      <PhaseIcon 
+                        className={`w-5 h-5 ${
+                          phase.status === 'completed' 
+                            ? 'text-green-400' 
+                            : phase.status === 'active' 
+                              ? 'text-indigo-400'
+                              : 'text-zinc-500'
+                        }`}
+                      />
+                    </div>
+                    
+                    {/* Phase Name */}
+                    <p className={`text-xs mt-2 font-medium ${
+                      phase.status === 'completed' 
+                        ? 'text-green-400' 
+                        : phase.status === 'active' 
+                          ? 'text-white'
+                          : 'text-zinc-500'
+                    }`}>
+                      {phase.name}
+                    </p>
+                    
+                    {/* Phase Description */}
+                    <p className="text-xs text-zinc-500 mt-1 text-center max-w-[120px]">
+                      {phase.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Project Team Chat */}
+        <div className="card mb-8 border-indigo-500/30 bg-gradient-to-br from-indigo-950/30 to-transparent">
+          <Link
+            href={`/projects/${project.id}/team-chat`}
+            className="flex items-center gap-4 hover:opacity-80 transition-opacity"
+          >
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+              <Users className="w-7 h-7 text-indigo-400" />
+            </div>
+            <div className="flex-1">
+              <h2 className="font-semibold text-lg mb-1">Project Team Chat</h2>
+              <p className="text-zinc-400 text-sm">
+                Chat với toàn bộ AI Team (PM, Coding, QA, UX, Data)
+              </p>
+              {lastTeamMsg && (
+                <p className="text-zinc-500 text-xs mt-1 line-clamp-1">
+                  {lastTeamMsg.role === 'USER' ? 'You' : 'Team'}: {lastTeamMsg.content.slice(0, 80)}...
+                </p>
+              )}
+            </div>
+            <div className="text-indigo-400 text-sm font-medium flex items-center gap-2">
+              Open Chat
+              <MessageSquare className="w-4 h-4" />
+            </div>
+          </Link>
+        </div>
+
+        {/* Regular Tasks */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-medium">Tasks</h2>
+        </div>
+
+        {regularTasks.length === 0 ? (
           <div className="card text-center py-12">
             <MessageSquare className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
             <h2 className="text-xl font-medium mb-2">No Tasks Yet</h2>
-            <p className="text-zinc-400 mb-6">Create your first task and start chatting with an agent</p>
+            <p className="text-zinc-400 mb-6">Create a task to chat with a specific agent</p>
             <button
               onClick={() => setShowCreate(true)}
               className="btn-primary inline-flex items-center gap-2"
@@ -132,9 +376,9 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {project.tasks?.map((task: any) => {
+            {regularTasks.map((task: any) => {
               const StatusIcon = STATUS_ICONS[task.status] || Clock;
-              const lastMsg = task.messages?.[0];
+              const lastMsg = task.messages?.[task.messages.length - 1];
               
               return (
                 <Link

@@ -11,9 +11,11 @@ A professional web-based AI agent platform that simulates a software company wit
 ## 2. Design Language
 
 ### Aesthetic Direction
+
 Linear/Vercel-inspired dark UI with glass morphism accents and crisp typography.
 
 ### Color Palette
+
 ```
 Background:     #09090b (zinc-950)
 Surface:        #18181b (zinc-900)
@@ -31,11 +33,13 @@ Agent Colors:
 ```
 
 ### Typography
+
 - Font: Inter (Google Fonts) with system fallbacks
 - Headings: Bold, tight letter-spacing
 - Body: Regular weight, relaxed line-height
 
 ### Motion
+
 - Subtle fade-ins (opacity 0→1, 200ms ease-out)
 - Button hover: scale(1.02) + brightness
 - Chat messages: slide-up animation
@@ -46,6 +50,7 @@ Agent Colors:
 ## 3. Tech Stack
 
 ### Frontend
+
 - **Next.js 14** (App Router)
 - **TypeScript**
 - **TailwindCSS** + **Shadcn/UI**
@@ -55,11 +60,12 @@ Agent Colors:
 - **Axios** (HTTP client)
 
 ### Backend
+
 - **NestJS** (Node.js framework)
 - **Prisma** (ORM)
 - **PostgreSQL** (database)
 - **JWT** (authentication)
-- **Ollama** (local LLM - llama3.2)
+- **Ollama** (local LLM - gemma4:latest)
 
 ---
 
@@ -130,27 +136,32 @@ web-agent/
 ## 5. Features & Interactions
 
 ### Authentication
+
 - Register with email/password
 - Login returns JWT token
 - Protected routes redirect to login
 
 ### Dashboard
+
 - Stats cards: Total Projects, Active Tasks, Completed Tasks
 - Recent Projects quick access
 - Quick action buttons
 
 ### Projects
+
 - Create project (name, description)
 - List all projects as cards
 - Click to enter project detail
 
 ### Tasks
+
 - Create task with title, description, agent type
 - Task statuses: PENDING → IN_PROGRESS → DONE (or FAILED)
 - Real-time chat with agent (streaming)
 - Conversation history
 
 ### Agents
+
 - 5 specialized agents, each with unique:
   - Name & icon
   - Color accent
@@ -234,59 +245,68 @@ enum Role {
 ## 7. API Endpoints
 
 ### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /auth/register | Register new user |
-| POST | /auth/login | Login, returns JWT |
+
+| Method | Endpoint       | Description        |
+| ------ | -------------- | ------------------ |
+| POST   | /auth/register | Register new user  |
+| POST   | /auth/login    | Login, returns JWT |
 
 ### Projects
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /projects | List user's projects |
-| POST | /projects | Create project |
-| GET | /projects/:id | Get project details |
-| PUT | /projects/:id | Update project |
-| DELETE | /projects/:id | Delete project |
+
+| Method | Endpoint      | Description          |
+| ------ | ------------- | -------------------- |
+| GET    | /projects     | List user's projects |
+| POST   | /projects     | Create project       |
+| GET    | /projects/:id | Get project details  |
+| PUT    | /projects/:id | Update project       |
+| DELETE | /projects/:id | Delete project       |
 
 ### Tasks
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /projects/:projectId/tasks | List tasks |
-| POST | /projects/:projectId/tasks | Create task |
-| GET | /tasks/:id | Get task + messages |
-| POST | /tasks/:id/chat | Send message (streaming) |
+
+| Method | Endpoint                   | Description              |
+| ------ | -------------------------- | ------------------------ |
+| GET    | /projects/:projectId/tasks | List tasks               |
+| POST   | /projects/:projectId/tasks | Create task              |
+| GET    | /tasks/:id                 | Get task + messages      |
+| POST   | /tasks/:id/chat            | Send message (streaming) |
 
 ### Agents
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /agents | List all agents |
-| POST | /agents/chat | Direct agent chat |
+
+| Method | Endpoint     | Description       |
+| ------ | ------------ | ----------------- |
+| GET    | /agents      | List all agents   |
+| POST   | /agents/chat | Direct agent chat |
 
 ---
 
 ## 8. Agent Definitions
 
 ### PM Agent
+
 - **Icon**: Briefcase
 - **Color**: Blue
 - **Prompt**: "You are an expert Project Manager. Break down projects into tasks, create specifications, estimate effort, and coordinate development."
 
 ### Coding Agent
+
 - **Icon**: Code
 - **Color**: Green
 - **Prompt**: "You are an expert Full Stack Developer. Write clean, production-ready code following best practices."
 
 ### QA Agent
+
 - **Icon**: Bug
 - **Color**: Orange
 - **Prompt**: "You are an expert QA Engineer. Create test plans, write tests, find bugs, ensure quality."
 
 ### UX Agent
+
 - **Icon**: Palette
 - **Color**: Pink
 - **Prompt**: "You are an expert UX Designer. Create user-centered designs, wireframes, improve UX."
 
 ### Data Agent
+
 - **Icon**: Database
 - **Color**: Cyan
 - **Prompt**: "You are an expert Data Engineer. Work with data pipelines, databases, and analytics."

@@ -1,17 +1,57 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Send, Briefcase, Code, Bug, Palette, Database, X, Bot } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { useEffect, useState, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Send,
+  Briefcase,
+  Code,
+  Bug,
+  Palette,
+  Database,
+  X,
+  Bot,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 const AGENTS = [
-  { type: 'PM', name: 'PM Agent', icon: Briefcase, color: '#3b82f6', description: 'Project Manager - Break down requirements, coordinate work' },
-  { type: 'CODING', name: 'Coding Agent', icon: Code, color: '#22c55e', description: 'Full Stack Developer - Write code, implement features' },
-  { type: 'QA', name: 'QA Agent', icon: Bug, color: '#f97316', description: 'Quality Assurance - Create tests, find bugs' },
-  { type: 'UX', name: 'UX Agent', icon: Palette, color: '#ec4899', description: 'UX Designer - Design experiences, create wireframes' },
-  { type: 'DATA', name: 'Data Agent', icon: Database, color: '#06b6d4', description: 'Data Engineer - Work with data, create pipelines' },
+  {
+    type: "PM",
+    name: "PM Agent",
+    icon: Briefcase,
+    color: "#3b82f6",
+    description: "Project Manager - Break down requirements, coordinate work",
+  },
+  {
+    type: "CODING",
+    name: "Coding Agent",
+    icon: Code,
+    color: "#22c55e",
+    description: "Full Stack Developer - Write code, implement features",
+  },
+  {
+    type: "QA",
+    name: "QA Agent",
+    icon: Bug,
+    color: "#f97316",
+    description: "Quality Assurance - Create tests, find bugs",
+  },
+  {
+    type: "UX",
+    name: "UX Agent",
+    icon: Palette,
+    color: "#ec4899",
+    description: "UX Designer - Design experiences, create wireframes",
+  },
+  {
+    type: "DATA",
+    name: "Data Agent",
+    icon: Database,
+    color: "#06b6d4",
+    description: "Data Engineer - Work with data, create pipelines",
+  },
 ];
 
 export default function AgentsPage() {
@@ -19,20 +59,20 @@ export default function AgentsPage() {
   const searchParams = useSearchParams();
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [streamedContent, setStreamedContent] = useState('');
+  const [streamedContent, setStreamedContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
-    const agentType = searchParams.get('agent');
+    const agentType = searchParams.get("agent");
     if (agentType) {
       const agent = AGENTS.find((a) => a.type === agentType);
       if (agent) {
@@ -42,64 +82,66 @@ export default function AgentsPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamedContent]);
 
   const handleSend = async () => {
     if (!input.trim() || !selectedAgent || sending) return;
 
     const userMessage = input.trim();
-    setInput('');
+    setInput("");
     setSending(true);
-    setStreaming(true);
-    setStreamedContent('');
 
-    const userMsg = { role: 'USER', content: userMessage, createdAt: new Date().toISOString() };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "USER",
+        content: userMessage,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:4000/api/agents/chat/stream', {
-        method: 'POST',
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:5000/api/agents/chat", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ agentType: selectedAgent.type, message: userMessage }),
+        body: JSON.stringify({
+          agentType: selectedAgent.type,
+          message: userMessage,
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to send message');
+      const data = await res.json();
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          fullContent += chunk;
-          setStreamedContent(fullContent);
-        }
-      }
-
-      const agentMsg = { role: 'AGENT', content: fullContent, createdAt: new Date().toISOString() };
-      setMessages((prev) => [...prev, agentMsg]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "AGENT",
+          content: data.content,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     } catch (err) {
-      console.error('Failed to send message', err);
-      const errorMsg = { role: 'AGENT', content: 'Sorry, I encountered an error. Please make sure Ollama is running.', createdAt: new Date().toISOString() };
-      setMessages((prev) => [...prev, errorMsg]);
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "AGENT",
+          content: "Sorry, an error occurred while processing your request.",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     } finally {
       setSending(false);
-      setStreaming(false);
-      setStreamedContent('');
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -115,7 +157,10 @@ export default function AgentsPage() {
       <header className="border-b border-zinc-800 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
+            <Link
+              href="/"
+              className="text-zinc-400 hover:text-white transition-colors"
+            >
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div className="flex items-center gap-3">
@@ -139,7 +184,9 @@ export default function AgentsPage() {
                   key={agent.type}
                   onClick={() => startChat(agent)}
                   className={`w-full card hover:border-zinc-700 transition-all duration-200 text-left ${
-                    selectedAgent?.type === agent.type ? 'border-indigo-500' : ''
+                    selectedAgent?.type === agent.type
+                      ? "border-indigo-500"
+                      : ""
                   }`}
                 >
                   <div className="flex items-center gap-4">
@@ -147,11 +194,16 @@ export default function AgentsPage() {
                       className="w-12 h-12 rounded-lg flex items-center justify-center"
                       style={{ backgroundColor: `${agent.color}20` }}
                     >
-                      <agent.icon className="w-6 h-6" style={{ color: agent.color }} />
+                      <agent.icon
+                        className="w-6 h-6"
+                        style={{ color: agent.color }}
+                      />
                     </div>
                     <div>
                       <h3 className="font-medium">{agent.name}</h3>
-                      <p className="text-zinc-400 text-sm">{agent.description}</p>
+                      <p className="text-zinc-400 text-sm">
+                        {agent.description}
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -166,13 +218,16 @@ export default function AgentsPage() {
                 {/* Chat Header */}
                 <div
                   className="flex items-center gap-4 pb-4 border-b border-zinc-700 mb-4"
-                  style={{ borderColor: '#27272a' }}
+                  style={{ borderColor: "#27272a" }}
                 >
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center"
                     style={{ backgroundColor: `${selectedAgent.color}20` }}
                   >
-                    <selectedAgent.icon className="w-5 h-5" style={{ color: selectedAgent.color }} />
+                    <selectedAgent.icon
+                      className="w-5 h-5"
+                      style={{ color: selectedAgent.color }}
+                    />
                   </div>
                   <div className="flex-1">
                     <h3 className="font-medium">{selectedAgent.name}</h3>
@@ -201,22 +256,34 @@ export default function AgentsPage() {
                   )}
 
                   {messages.map((msg, index) => (
-                    <div key={index} className={`flex gap-4 ${msg.role === 'USER' ? 'flex-row-reverse' : ''}`}>
+                    <div
+                      key={index}
+                      className={`flex gap-4 ${msg.role === "USER" ? "flex-row-reverse" : ""}`}
+                    >
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          msg.role === 'USER' ? 'bg-indigo-500' : ''
+                          msg.role === "USER" ? "bg-indigo-500" : ""
                         }`}
-                        style={msg.role === 'AGENT' ? { backgroundColor: `${selectedAgent.color}20` } : {}}
+                        style={
+                          msg.role === "AGENT"
+                            ? { backgroundColor: `${selectedAgent.color}20` }
+                            : {}
+                        }
                       >
-                        {msg.role === 'USER' ? (
+                        {msg.role === "USER" ? (
                           <span className="text-white text-xs">U</span>
                         ) : (
-                          <Bot className="w-4 h-4" style={{ color: selectedAgent.color }} />
+                          <Bot
+                            className="w-4 h-4"
+                            style={{ color: selectedAgent.color }}
+                          />
                         )}
                       </div>
                       <div
                         className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                          msg.role === 'USER' ? 'bg-indigo-500 text-white' : 'bg-zinc-800'
+                          msg.role === "USER"
+                            ? "bg-indigo-500 text-white"
+                            : "bg-zinc-800"
                         }`}
                       >
                         <div className="prose prose-invert prose-sm max-w-none">
@@ -232,7 +299,10 @@ export default function AgentsPage() {
                         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: `${selectedAgent.color}20` }}
                       >
-                        <Bot className="w-4 h-4" style={{ color: selectedAgent.color }} />
+                        <Bot
+                          className="w-4 h-4"
+                          style={{ color: selectedAgent.color }}
+                        />
                       </div>
                       <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800">
                         <div className="prose prose-invert prose-sm max-w-none">
@@ -249,10 +319,15 @@ export default function AgentsPage() {
                         className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ backgroundColor: `${selectedAgent.color}20` }}
                       >
-                        <Bot className="w-4 h-4" style={{ color: selectedAgent.color }} />
+                        <Bot
+                          className="w-4 h-4"
+                          style={{ color: selectedAgent.color }}
+                        />
                       </div>
                       <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800">
-                        <span className="animate-pulse text-zinc-400">Thinking...</span>
+                        <span className="animate-pulse text-zinc-400">
+                          Thinking...
+                        </span>
                       </div>
                     </div>
                   )}
