@@ -170,9 +170,10 @@ Hãy đảm bảo:
 
     try {
       this.currentStep = 'Đang xóa dữ liệu cũ...';
-      // ========== XÓA DỮ LIỆU CŨ NGAY LẬP TỨC ==========
+      // ========== XÓA DỮ LIỆU CŨ NHƯNG GIỮ LẠI TEAM CHAT ==========
+      // Tìm và xóa các task cũ (KHÔNG phải team chat)
       const oldTasks = await this.prisma.task.findMany({
-        where: { projectId: projectId },
+        where: { projectId: projectId, title: { not: "Project Team Chat" } },
         select: { id: true },
       });
       
@@ -183,11 +184,11 @@ Hãy đảm bảo:
       }
       
       await this.prisma.task.deleteMany({
-        where: { projectId: projectId },
+        where: { projectId: projectId, title: { not: "Project Team Chat" } },
       });
       
-      console.log(`[Analysis] Cleared ${oldTasks.length} old tasks for project ${projectId}`);
-      // ============================================
+      console.log(`[Analysis] Cleared ${oldTasks.length} old tasks (kept Team Chat) for project ${projectId}`);
+      
       this.currentStep = 'PM Agent đang phân tích...';
 
       // Gọi PM Agent để phân tích và tạo tasks
@@ -201,31 +202,33 @@ Hãy đảm bảo:
 
       this.currentStep = `Đang tạo ${parsedTasks.length} tasks...`;
 
-      // Tạo lại Project Team Chat mới
-      const newTeamChat = await this.prisma.task.create({
-        data: {
-          title: "Project Team Chat",
-          description: "Shared chat for the entire project team",
-          agentType: "PM",
+      // Tìm hoặc tạo mới Team Chat - KHÔNG xóa message cũ
+      let teamChat = await this.prisma.task.findFirst({
+        where: {
           projectId: projectId,
-          status: "DONE",
-          result: `Đã phân tích lại với ${parsedTasks.length} công việc`,
+          title: "Project Team Chat",
         },
       });
+      
+      if (!teamChat) {
+        teamChat = await this.prisma.task.create({
+          data: {
+            title: "Project Team Chat",
+            description: "Shared chat for the entire project team",
+            agentType: "PM",
+            projectId: projectId,
+            status: "DONE",
+          },
+        });
+      }
 
-      // Lưu PM's analysis vào team chat
+      // Lưu PM's analysis vào team chat (THÊM MỚI, không xóa message cũ)
       await this.prisma.message.create({
         data: {
           role: "AGENT",
           content: response,
-          taskId: newTeamChat.id,
+          taskId: teamChat.id,
         },
-      });
-
-      // Fetch teamChat with messages
-      teamChat = await this.prisma.task.findUnique({
-        where: { id: newTeamChat.id },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
       });
 
       // Tạo các tasks mới
@@ -246,8 +249,14 @@ Hãy đảm bảo:
 
       console.log(`[Analysis Queue] Completed re-analysis for project ${projectId}. Created ${createdTasks.length} new tasks.`);
 
+      // Fetch teamChat với messages để trả về
+      const teamChatWithMessages = await this.prisma.task.findUnique({
+        where: { id: teamChat.id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+
       return {
-        teamChat,
+        teamChat: teamChatWithMessages,
         createdTasks,
         analysis: response,
       };
