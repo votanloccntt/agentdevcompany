@@ -1,47 +1,27 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #09090b;
-  color: #fafafa;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #18181b;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
-}
-
-@layer components {
-  .btn-primary {
-    @apply bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
   }
-  
-  .btn-secondary {
-    @apply bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  to {
+    transform: translateX(0);
+    opacity: 1;
   }
-  
-  .input-field {
-    @apply bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition-colors;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
   }
-  
-  .card {
-    @apply bg-zinc-900 border border-zinc-800 rounded-xl p-6;
+  50% {
+    opacity: 0.5;
   }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse 1.5s ease-in-out infinite;
 }

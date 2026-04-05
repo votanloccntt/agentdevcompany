@@ -22,6 +22,7 @@ export class ProjectSynthesisService implements OnModuleInit {
   // Concurrency limiter - max 1 analysis at a time
   private analysisQueue: AnalysisJob[] = [];
   private isProcessing = false;
+  private currentStep = '';
   private readonly MAX_CONCURRENT = 1;
 
   constructor(
@@ -31,6 +32,19 @@ export class ProjectSynthesisService implements OnModuleInit {
 
   onModuleInit() {
     console.log('[ProjectSynthesis] Analysis queue initialized - max concurrent:', this.MAX_CONCURRENT);
+  }
+
+  // Get queue status for frontend
+  getQueueStatus() {
+    return {
+      queue: this.analysisQueue.map(job => ({
+        projectId: job.projectId,
+        timestamp: Date.now(), // Approximate
+      })),
+      isProcessing: this.isProcessing,
+      currentStep: this.currentStep,
+      queueSize: this.analysisQueue.length,
+    };
   }
 
   // Queue-based analysis - ensures sequential processing
@@ -48,30 +62,26 @@ export class ProjectSynthesisService implements OnModuleInit {
   }
 
   private async processQueue(): Promise<void> {
-    // Skip if already processing max concurrent
-    if (this.isProcessing) {
-      return;
-    }
+    if (this.isProcessing) return;
 
-    // Get next job from queue
     const job = this.analysisQueue.shift();
-    if (!job) {
-      return;
-    }
+    if (!job) return;
 
     this.isProcessing = true;
+    this.currentStep = 'Đang phân tích dự án...';
     console.log(`[Analysis Queue] Processing project ${job.projectId}. Remaining: ${this.analysisQueue.length}`);
 
     try {
-      // Perform the actual analysis
       const result = await this.doAnalyzeAndRespond(job.projectId);
+      this.currentStep = 'Hoàn tất!';
       job.resolve(result);
     } catch (error) {
-      console.error(`[Analysis Queue] Error processing project ${job.projectId}:`, error);
+      console.error(`[Analysis Queue] Error:`, error);
+      this.currentStep = 'Đã xảy ra lỗi';
       job.reject(error);
     } finally {
       this.isProcessing = false;
-      // Process next in queue
+      setTimeout(() => { this.currentStep = ''; }, 3000);
       this.processQueue();
     }
   }
@@ -159,6 +169,7 @@ Hãy đảm bảo:
 - Cân bằng khối lượng work giữa các agents`;
 
     try {
+      this.currentStep = 'Đang xóa dữ liệu cũ...';
       // ========== XÓA DỮ LIỆU CŨ NGAY LẬP TỨC ==========
       const oldTasks = await this.prisma.task.findMany({
         where: { projectId: projectId },
@@ -177,6 +188,7 @@ Hãy đảm bảo:
       
       console.log(`[Analysis] Cleared ${oldTasks.length} old tasks for project ${projectId}`);
       // ============================================
+      this.currentStep = 'PM Agent đang phân tích...';
 
       // Gọi PM Agent để phân tích và tạo tasks
       const response = await this.ollama.chat(
@@ -186,6 +198,8 @@ Hãy đảm bảo:
 
       // Parse response để trích xuất các tasks
       const parsedTasks = this.parseTasksFromResponse(response);
+
+      this.currentStep = `Đang tạo ${parsedTasks.length} tasks...`;
 
       // Tạo lại Project Team Chat mới
       const newTeamChat = await this.prisma.task.create({

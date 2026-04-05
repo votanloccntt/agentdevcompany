@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import AnalysisNotification from '@/components/AnalysisNotification';
 
 export const metadata: Metadata = {
   title: 'Web Agent Platform',
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-background text-white">
         {children}
+        <AnalysisNotification />
       </body>
     </html>
   );

@@ -5,6 +5,16 @@ import { ProjectSynthesisService } from './project-synthesis.service';
 import { CreateProjectDto } from './dtos/create-project.dto';
 import { UpdateProjectDto } from './dtos/update-project.dto';
 
+@Controller('analysis-queue')
+export class AnalysisQueueController {
+  constructor(private synthesisService: ProjectSynthesisService) {}
+
+  @Get('status')
+  async getStatus() {
+    return this.synthesisService.getQueueStatus();
+  }
+}
+
 @Controller('projects')
 @UseGuards(AuthGuard('jwt'))
 export class ProjectsController {
@@ -98,5 +108,11 @@ export class ProjectsController {
   async reanalyze(@Param('id') id: string, @Request() req) {
     await this.projectsService.findOne(id, req.user.id);
     return this.synthesisService.analyzeAndRespond(id);
+  }
+
+  // Get analysis queue status
+  @Get('analysis-queue/status')
+  async getQueueStatus() {
+    return this.synthesisService.getQueueStatus();
   }
 }
