@@ -23,10 +23,7 @@ export default function TaskChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [streaming, setStreaming] = useState(false);
-  const [streamedContent, setStreamedContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -61,8 +58,6 @@ export default function TaskChatPage() {
     const userMessage = input.trim();
     setInput("");
     setSending(true);
-    setStreaming(true);
-    setStreamedContent("");
 
     // Add user message immediately
     const userMsg = {
@@ -73,57 +68,19 @@ export default function TaskChatPage() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        "http://localhost:5000/api/tasks/" + params.taskId + "/chat/stream",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ message: userMessage }),
-        },
-      );
-
-      if (!response.ok) throw new Error("Failed to send message");
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullContent = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          fullContent += chunk;
-          setStreamedContent(fullContent);
-        }
-      }
-
-      // Add agent message
-      const agentMsg = {
-        role: "AGENT",
-        content: fullContent,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, agentMsg]);
+      const result = await tasksAPI.chat(params.taskId as string, userMessage);
+      setMessages(result.data.messages);
     } catch (err) {
       console.error("Failed to send message", err);
-      // Add error message
       const errorMsg = {
         role: "AGENT",
         content:
-          "Sorry, I encountered an error. Please make sure Ollama is running.",
+          "Xin lỗi, đã xảy ra lỗi. Vui lòng đảm bảo Ollama đang chạy.",
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setSending(false);
-      setStreaming(false);
-      setStreamedContent("");
     }
   };
 

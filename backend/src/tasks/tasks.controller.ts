@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, Sse } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dtos/create-task.dto';
@@ -34,37 +34,7 @@ export class TasksController {
     @Body() dto: ChatTaskDto,
     @Request() req,
   ) {
-    const { messages, stream } = await this.tasksService.chat(id, dto.message, req.user.id);
-    return { messages, taskId: id };
-  }
-
-  @Post('tasks/:id/chat/stream')
-  async chatStream(
-    @Param('id') id: string,
-    @Body() dto: ChatTaskDto,
-    @Request() req,
-  ) {
-    const { stream } = await this.tasksService.chat(id, dto.message, req.user.id);
-    
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of stream) {
-            controller.enqueue(new TextEncoder().encode(chunk));
-          }
-          controller.close();
-        } catch (err) {
-          controller.error(err);
-        }
-      },
-    });
-
-    return new Response(readable, {
-      headers: {
-        'Content-Type': 'text/plain',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
+    const result = await this.tasksService.chat(id, dto.message, req.user.id);
+    return result;
   }
 }

@@ -7,6 +7,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
 import { AgentsModule } from './agents/agents.module';
 import { OllamaModule } from './ollama/ollama.module';
+import { TestModule } from './test/test.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { OllamaModule } from './ollama/ollama.module';
     TasksModule,
     AgentsModule,
     OllamaModule,
+    TestModule,
   ],
 })
 export class AppModule {}

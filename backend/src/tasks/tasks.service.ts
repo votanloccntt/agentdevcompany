@@ -96,7 +96,7 @@ export class TasksService {
     taskId: string,
     userMessage: string,
     userId: string,
-  ): Promise<{ messages: any[]; stream: any }> {
+  ): Promise<{ messages: any[]; response: string }> {
     const task = await this.findOne(taskId, userId);
     const agent = AGENT_PROMPTS[task.agentType];
 
@@ -160,51 +160,35 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
     }));
 
     // Add current message with project context
-    const messageWithContext = `${projectContext}\n\n## CÂU HỎI CỦA USER:
-${userMessage}`;
+    const messageWithContext = `${projectContext}\n\n## CÂU HỎI CỦA USER:\n${userMessage}`;
     ollamaMessages.push({ role: "user" as const, content: messageWithContext });
 
-    // Create agent message placeholder
+    // Non-streaming response
+    const enhancedPrompt = `${agent.systemPrompt}\n\n${projectContext}`;
+    const response = await this.ollama.chat(ollamaMessages, enhancedPrompt);
+
+    // Create and save agent message
     const agentMessage = await this.prisma.message.create({
       data: {
         role: "AGENT",
-        content: "",
+        content: response,
         taskId,
       },
-    });
-
-    // Stream response with enhanced prompt
-    const enhancedPrompt = `${agent.systemPrompt}\n\n${projectContext}`;
-    const stream = this.ollama.chatStream(ollamaMessages, enhancedPrompt);
-
-    return { messages: [...history, agentMessage], stream };
-  }
-
-  async processStream(
-    taskId: string,
-    agentMessageId: string,
-    stream: AsyncGenerator<string>,
-  ): Promise<string> {
-    let fullResponse = "";
-
-    for await (const chunk of stream) {
-      fullResponse += chunk;
-      // Optionally update message in real-time
-    }
-
-    // Save final response
-    await this.prisma.message.update({
-      where: { id: agentMessageId },
-      data: { content: fullResponse },
     });
 
     // Update task status
     await this.prisma.task.update({
       where: { id: taskId },
-      data: { status: "DONE", result: fullResponse },
+      data: { status: "DONE", result: response },
     });
 
-    return fullResponse;
+    // Return updated history
+    const updatedHistory = await this.prisma.message.findMany({
+      where: { taskId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return { messages: updatedHistory, response };
   }
 
   async updateStatus(

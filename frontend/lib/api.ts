@@ -65,12 +65,6 @@ export const tasksAPI = {
     api.post(`/projects/${projectId}/tasks`, { title, agentType, description }),
   chat: (taskId: string, message: string) =>
     api.post(`/tasks/${taskId}/chat`, { message }),
-  chatStream: (taskId: string, message: string) =>
-    api.post(
-      `/tasks/${taskId}/chat/stream`,
-      { message },
-      { responseType: "stream" },
-    ),
 };
 
 export const agentsAPI = {
