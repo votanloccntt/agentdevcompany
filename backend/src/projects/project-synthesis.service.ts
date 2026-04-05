@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, OnModuleInit } from "@nestjs/common";
 import { OllamaService } from "../ollama/ollama.service";
 import { PrismaService } from "../prisma.service";
 import { AgentType } from "@prisma/client";
@@ -10,59 +10,73 @@ interface ParsedTask {
   priority?: string;
 }
 
+// Queue item interface
+interface AnalysisJob {
+  projectId: string;
+  resolve: (value: any) => void;
+  reject: (error: any) => void;
+}
+
 @Injectable()
-export class ProjectSynthesisService {
+export class ProjectSynthesisService implements OnModuleInit {
+  // Concurrency limiter - max 1 analysis at a time
+  private analysisQueue: AnalysisJob[] = [];
+  private isProcessing = false;
+  private readonly MAX_CONCURRENT = 1;
+
   constructor(
     private ollama: OllamaService,
     private prisma: PrismaService,
   ) {}
 
-  async startProjectChat(projectId: string, userMessage?: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-    });
-
-    if (!project) {
-      throw new Error("Project not found");
-    }
-
-    // Tìm hoặc tạo Project Team Chat
-    let teamChat = await this.prisma.task.findFirst({
-      where: {
-        projectId: projectId,
-        title: "Project Team Chat",
-      },
-      include: { messages: { orderBy: { createdAt: "asc" } } },
-    });
-
-    if (!teamChat) {
-      teamChat = await this.prisma.task.create({
-        data: {
-          title: "Project Team Chat",
-          description: "Shared chat for the entire project team",
-          agentType: "PM",
-          projectId: projectId,
-          status: "IN_PROGRESS",
-        },
-        include: { messages: { orderBy: { createdAt: "asc" } } },
-      });
-    }
-
-    // Nếu có user message, lưu vào chat
-    if (userMessage) {
-      await this.prisma.message.create({
-        data: {
-          role: "USER",
-          content: userMessage,
-          taskId: teamChat.id,
-        },
-      });
-    }
-
-    return teamChat;
+  onModuleInit() {
+    console.log('[ProjectSynthesis] Analysis queue initialized - max concurrent:', this.MAX_CONCURRENT);
   }
 
-  async analyzeAndRespond(projectId: string) {
+  // Queue-based analysis - ensures sequential processing
+  async analyzeAndRespond(projectId: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Add to queue
+      this.analysisQueue.push({ projectId, resolve, reject });
+      
+      // Log queue status
+      console.log(`[Analysis Queue] Job added for project ${projectId}. Queue size: ${this.analysisQueue.length}`);
+      
+      // Try to process
+      this.processQueue();
+    });
+  }
+
+  private async processQueue(): Promise<void> {
+    // Skip if already processing max concurrent
+    if (this.isProcessing) {
+      return;
+    }
+
+    // Get next job from queue
+    const job = this.analysisQueue.shift();
+    if (!job) {
+      return;
+    }
+
+    this.isProcessing = true;
+    console.log(`[Analysis Queue] Processing project ${job.projectId}. Remaining: ${this.analysisQueue.length}`);
+
+    try {
+      // Perform the actual analysis
+      const result = await this.doAnalyzeAndRespond(job.projectId);
+      job.resolve(result);
+    } catch (error) {
+      console.error(`[Analysis Queue] Error processing project ${job.projectId}:`, error);
+      job.reject(error);
+    } finally {
+      this.isProcessing = false;
+      // Process next in queue
+      this.processQueue();
+    }
+  }
+
+  private async doAnalyzeAndRespond(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -145,6 +159,25 @@ Hãy đảm bảo:
 - Cân bằng khối lượng work giữa các agents`;
 
     try {
+      // ========== XÓA DỮ LIỆU CŨ NGAY LẬP TỨC ==========
+      const oldTasks = await this.prisma.task.findMany({
+        where: { projectId: projectId },
+        select: { id: true },
+      });
+      
+      for (const task of oldTasks) {
+        await this.prisma.message.deleteMany({
+          where: { taskId: task.id },
+        });
+      }
+      
+      await this.prisma.task.deleteMany({
+        where: { projectId: projectId },
+      });
+      
+      console.log(`[Analysis] Cleared ${oldTasks.length} old tasks for project ${projectId}`);
+      // ============================================
+
       // Gọi PM Agent để phân tích và tạo tasks
       const response = await this.ollama.chat(
         [{ role: "user", content: `Hãy phân tích và lên kế hoạch cho dự án sau:\n\n${context}` }],
@@ -154,16 +187,34 @@ Hãy đảm bảo:
       // Parse response để trích xuất các tasks
       const parsedTasks = this.parseTasksFromResponse(response);
 
+      // Tạo lại Project Team Chat mới
+      const newTeamChat = await this.prisma.task.create({
+        data: {
+          title: "Project Team Chat",
+          description: "Shared chat for the entire project team",
+          agentType: "PM",
+          projectId: projectId,
+          status: "DONE",
+          result: `Đã phân tích lại với ${parsedTasks.length} công việc`,
+        },
+      });
+
       // Lưu PM's analysis vào team chat
       await this.prisma.message.create({
         data: {
           role: "AGENT",
           content: response,
-          taskId: teamChat.id,
+          taskId: newTeamChat.id,
         },
       });
 
-      // Tạo các tasks trong database
+      // Fetch teamChat with messages
+      teamChat = await this.prisma.task.findUnique({
+        where: { id: newTeamChat.id },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+
+      // Tạo các tasks mới
       const createdTasks = [];
       for (const taskData of parsedTasks) {
         const task = await this.prisma.task.create({
@@ -179,11 +230,7 @@ Hãy đảm bảo:
         createdTasks.push(task);
       }
 
-      // Update team chat status
-      await this.prisma.task.update({
-        where: { id: teamChat.id },
-        data: { status: "DONE", result: `Đã tạo ${createdTasks.length} công việc` },
-      });
+      console.log(`[Analysis Queue] Completed re-analysis for project ${projectId}. Created ${createdTasks.length} new tasks.`);
 
       return {
         teamChat,
@@ -194,6 +241,51 @@ Hãy đảm bảo:
       console.error("Error in project analysis:", error);
       throw error;
     }
+  }
+
+  async startProjectChat(projectId: string, userMessage?: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    // Tìm hoặc tạo Project Team Chat
+    let teamChat = await this.prisma.task.findFirst({
+      where: {
+        projectId: projectId,
+        title: "Project Team Chat",
+      },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
+
+    if (!teamChat) {
+      teamChat = await this.prisma.task.create({
+        data: {
+          title: "Project Team Chat",
+          description: "Shared chat for the entire project team",
+          agentType: "PM",
+          projectId: projectId,
+          status: "IN_PROGRESS",
+        },
+        include: { messages: { orderBy: { createdAt: "asc" } } },
+      });
+    }
+
+    // Nếu có user message, lưu vào chat
+    if (userMessage) {
+      await this.prisma.message.create({
+        data: {
+          role: "USER",
+          content: userMessage,
+          taskId: teamChat.id,
+        },
+      });
+    }
+
+    return teamChat;
   }
 
   async chat(projectId: string, userMessage: string) {

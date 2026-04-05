@@ -57,6 +57,7 @@ export default function ProjectDetailPage() {
   const [newAgent, setNewAgent] = useState('CODING');
   const [creating, setCreating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState<string>('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -102,13 +103,29 @@ export default function ProjectDetailPage() {
 
   const handleReanalyze = async () => {
     setAnalyzing(true);
+    setAnalysisStep('Đang xóa dữ liệu cũ...');
+    
     try {
+      // Step 1: Clear old data
       await projectsAPI.analyze(project.id);
+      
+      // Step 2: Wait for PM analysis to complete
+      setAnalysisStep('PM Agent đang phân tích dự án...');
+      
+      // Wait a bit for the analysis to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      setAnalysisStep('Đang tạo tasks mới...');
       await fetchProject(project.id);
+      
+      setAnalysisStep('Hoàn tất!');
+      await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (err) {
       console.error('Failed to analyze', err);
+      setAnalysisStep('Đã xảy ra lỗi');
     } finally {
       setAnalyzing(false);
+      setAnalysisStep('');
     }
   };
 
@@ -211,7 +228,7 @@ export default function ProjectDetailPage() {
                 disabled={analyzing}
                 className="btn-secondary flex items-center gap-2"
               >
-                <Brain className="w-4 h-4" />
+                <Brain className={`w-4 h-4 ${analyzing ? 'animate-pulse' : ''}`} />
                 {analyzing ? 'Đang phân tích...' : 'Phân tích lại'}
               </button>
             )}
@@ -328,6 +345,41 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Analysis Progress */}
+        {analyzing && (
+          <div className="card mb-8 border-indigo-500/50 bg-gradient-to-br from-indigo-950/50 to-transparent animate-pulse">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                <Brain className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div className="flex-1">
+                <h2 className="font-semibold text-lg text-indigo-400">PM Agent Đang Phân Tích</h2>
+                <p className="text-zinc-400 text-sm">{analysisStep || 'Đang xử lý...'}</p>
+              </div>
+            </div>
+            
+            {/* Steps Progress */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${analysisStep === 'Đang xóa dữ liệu cũ...' ? 'bg-indigo-400 animate-ping' : 'bg-green-400'}`} />
+                <span className={`text-sm ${analysisStep === 'Đang xóa dữ liệu cũ...' ? 'text-white' : 'text-zinc-400'}`}>Xóa dữ liệu cũ</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${analysisStep === 'PM Agent đang phân tích dự án...' ? 'bg-indigo-400 animate-ping' : analysisStep.includes('Hoàn tất') || analysisStep === 'Đang tạo tasks mới...' ? 'bg-green-400' : 'bg-zinc-600'}`} />
+                <span className={`text-sm ${analysisStep === 'PM Agent đang phân tích dự án...' ? 'text-white' : 'text-zinc-400'}`}>PM Agent phân tích</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${analysisStep === 'Đang tạo tasks mới...' ? 'bg-indigo-400 animate-ping' : analysisStep.includes('Hoàn tất') ? 'bg-green-400' : 'bg-zinc-600'}`} />
+                <span className={`text-sm ${analysisStep === 'Đang tạo tasks mới...' ? 'text-white' : 'text-zinc-400'}`}>Tạo tasks mới</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${analysisStep.includes('Hoàn tất') ? 'bg-green-400' : 'bg-zinc-600'}`} />
+                <span className={`text-sm ${analysisStep.includes('Hoàn tất') ? 'text-green-400' : 'text-zinc-400'}`}>Hoàn tất</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Project Team Chat */}
         <div className="card mb-8 border-indigo-500/30 bg-gradient-to-br from-indigo-950/30 to-transparent">
