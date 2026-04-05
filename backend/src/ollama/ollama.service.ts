@@ -83,6 +83,7 @@ export class OllamaService {
           model: "gemma4:latest",
           messages: [{ role: "system", content: system }, ...messages],
           stream: false,
+          thinking: false,
         }),
       });
 
@@ -91,7 +92,6 @@ export class OllamaService {
       }
 
       const data = await response.json();
-      console.log("Ollama response:", JSON.stringify(data));
       return data.message?.content || data.response || "";
     } catch (error) {
       console.error("Ollama chat error:", error);
@@ -108,6 +108,7 @@ export class OllamaService {
           model: "gemma4:latest",
           messages: [{ role: "system", content: system }, ...messages],
           stream: true,
+          thinking: false, // Disable extended thinking to get plain text
         }),
       });
 
@@ -126,15 +127,12 @@ export class OllamaService {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line);
-
-            // Luôn yield object plain
-            yield {
-              content: parsed.message?.content ?? parsed.content ?? "",
-              thinking: parsed.message?.thinking ?? parsed.thinking ?? "",
-            };
-          } catch (err) {
-            console.error("JSON parse error:", err, line);
-          }
+            // gemma4 returns message.content directly when thinking is disabled
+            const content = parsed.message?.content ?? parsed.content ?? "";
+            if (content) {
+              yield content;
+            }
+          } catch {}
         }
       }
     } catch (error) {
