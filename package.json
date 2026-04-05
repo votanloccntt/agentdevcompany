@@ -1,0 +1,16 @@
+{
+  "name": "web-agent",
+  "version": "1.0.0",
+  "description": "Multi-Agent AI Platform",
+  "scripts": {
+    "dev": "npm run dev:backend & npm run dev:frontend",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "setup:db": "cd backend && npx prisma migrate dev --name init"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}
