@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { RealTimeService } from '../realtime/real-time.service';
 import { Project, User } from '@prisma/client';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtimeService: RealTimeService,
+  ) {}
 
   async findAll(userId: string): Promise<Project[]> {
     return this.prisma.project.findMany({
@@ -132,5 +136,12 @@ export class ProjectsService {
   async remove(id: string, userId: string): Promise<void> {
     const project = await this.findOne(id, userId);
     await this.prisma.project.delete({ where: { id: project.id } });
+  }
+
+  /**
+   * Notify that a new project was created
+   */
+  notifyProjectCreated(project: Project) {
+    this.realtimeService.broadcast('project:created', { project });
   }
 }

@@ -25,9 +25,27 @@ export interface AnalysisProgressEvent {
   status: 'started' | 'progress' | 'completed' | 'error';
 }
 
+export interface ModelThinkingEvent {
+  taskId: string;
+  projectId: string;
+  thinking: boolean;
+  step: string;
+}
+
 export interface ProjectUpdatedEvent {
   projectId: string;
   project: any;
+}
+
+export interface ExecutionStartedEvent {
+  taskId: string;
+  taskTitle: string;
+  agentType: string;
+  projectId: string;
+  projectName: string;
+  status: 'RUNNING' | 'DONE' | 'ERROR';
+  startedAt: number;
+  currentStep: string;
 }
 
 @Injectable()
@@ -74,51 +92,116 @@ export class RealTimeService {
    * Broadcast to all connected clients
    */
   broadcast(event: string, data: any) {
-    if (!this.server) return;
+    if (!this.server) {
+      console.warn(`[RealTime] broadcast failed: server not initialized. Event: ${event}`);
+      return;
+    }
+    console.log(`[RealTime] Broadcasting ${event} to all clients:`, data);
     this.server.emit(event, data);
   }
 
   // ============ Convenience Methods ============
 
   /**
-   * Notify that a new task was created
+   * Notify that a new task was created (broadcast to all)
    */
   taskCreated(projectId: string, task: any) {
-    this.emitToProject(projectId, 'task:created', { projectId, task });
+    if (!this.server) return;
+    this.server.emit('task:created', { projectId, task });
+    this.server.to(`project:${projectId}`).emit('task:created', { projectId, task });
   }
 
   /**
-   * Notify that a task was updated
+   * Notify that a task was updated (broadcast to all)
    */
   taskUpdated(projectId: string, task: any) {
-    this.emitToProject(projectId, 'task:updated', { projectId, task });
+    if (!this.server) return;
+    this.server.emit('task:updated', { projectId, task });
+    this.server.to(`project:${projectId}`).emit('task:updated', { projectId, task });
   }
 
   /**
    * Notify that a chat message was added
    */
   chatMessage(projectId: string, taskId: string, message: any) {
-    this.emitToProject(projectId, 'chat:message', { projectId, taskId, message });
+    if (!this.server) return;
+    this.server.emit('chat:message', { projectId, taskId, message });
+    this.server.to(`project:${projectId}`).emit('chat:message', { projectId, taskId, message });
   }
 
   /**
-   * Notify analysis progress
+   * Notify analysis progress (broadcast to all)
    */
   analysisProgress(projectId: string, step: string, status: 'started' | 'progress' | 'completed' | 'error') {
-    this.emitToProject(projectId, 'analysis:progress', { projectId, step, status });
+    if (!this.server) return;
+    this.server.emit('analysis:progress', { projectId, step, status });
+    this.server.to(`project:${projectId}`).emit('analysis:progress', { projectId, step, status });
   }
 
   /**
    * Notify that project was updated
    */
   projectUpdated(projectId: string, project: any) {
-    this.emitToProject(projectId, 'project:updated', { projectId, project });
+    if (!this.server) return;
+    this.server.emit('project:updated', { projectId, project });
+    this.server.to(`project:${projectId}`).emit('project:updated', { projectId, project });
   }
 
   /**
-   * Notify analysis completed with new tasks
+   * Notify model thinking state (for task chat notifications)
+   */
+  modelThinking(taskId: string, projectId: string, step: string, thinking: boolean) {
+    if (!this.server) return;
+    this.server.emit('model:thinking', { taskId, projectId, thinking, step });
+    this.server.to(`project:${projectId}`).emit('model:thinking', { taskId, projectId, thinking, step });
+    this.server.to(`task:${taskId}`).emit('model:thinking', { taskId, projectId, thinking, step });
+  }
+
+  /**
+   * Notify analysis completed with new tasks (broadcast to all)
    */
   analysisCompleted(projectId: string, tasks: any[], analysis: string) {
-    this.emitToProject(projectId, 'analysis:completed', { projectId, tasks, analysis });
+    if (!this.server) return;
+    this.server.emit('analysis:completed', { projectId, tasks, analysis });
+    this.server.to(`project:${projectId}`).emit('analysis:completed', { projectId, tasks, analysis });
+  }
+
+  // ============ Execution Events ============
+
+  /**
+   * Notify execution started (global broadcast for notification bar)
+   */
+  executionStarted(taskId: string, taskTitle: string, agentType: string, projectId: string, projectName: string, currentStep: string) {
+    if (!this.server) return;
+    const data = { taskId, taskTitle, agentType, projectId, projectName, status: 'RUNNING' as const, startedAt: Date.now(), currentStep };
+    this.server.emit('execution:started', data);
+    this.server.to(`project:${projectId}`).emit('execution:started', data);
+  }
+
+  /**
+   * Notify execution step updated
+   */
+  executionStep(taskId: string, step: string) {
+    if (!this.server) return;
+    this.server.emit('execution:step', { taskId, step });
+    this.server.to(`task:${taskId}`).emit('execution:step', { taskId, step });
+  }
+
+  /**
+   * Notify execution completed
+   */
+  executionCompleted(taskId: string) {
+    if (!this.server) return;
+    this.server.emit('execution:completed', { taskId });
+    this.server.to(`task:${taskId}`).emit('execution:completed', { taskId });
+  }
+
+  /**
+   * Notify execution error
+   */
+  executionError(taskId: string) {
+    if (!this.server) return;
+    this.server.emit('execution:error', { taskId });
+    this.server.to(`task:${taskId}`).emit('execution:error', { taskId });
   }
 }

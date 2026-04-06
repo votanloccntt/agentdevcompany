@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, FolderKanban, ArrowLeft, Trash2 } from 'lucide-react';
 import { projectsAPI } from '@/lib/api';
+import { realtime } from '@/lib/realtime';
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -22,6 +23,37 @@ export default function ProjectsPage() {
       return;
     }
     fetchProjects();
+  }, []);
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!realtime.isConnected()) {
+      const token = localStorage.getItem('token');
+      realtime.connect(token || undefined);
+    }
+
+    const handleProjectCreated = (data: { project: any }) => {
+      console.log('[Projects] New project created:', data.project);
+      setProjects(prev => {
+        // Check if project already exists
+        const exists = prev.some(p => p.id === data.project.id);
+        if (exists) return prev;
+        return [data.project, ...prev];
+      });
+    };
+
+    const handleProjectUpdated = (data: { project: any }) => {
+      console.log('[Projects] Project updated:', data.project);
+      setProjects(prev => prev.map(p => p.id === data.project.id ? data.project : p));
+    };
+
+    realtime.on('project:created', handleProjectCreated);
+    realtime.on('project:updated', handleProjectUpdated);
+
+    return () => {
+      realtime.off('project:created', handleProjectCreated);
+      realtime.off('project:updated', handleProjectUpdated);
+    };
   }, []);
 
   const fetchProjects = async () => {

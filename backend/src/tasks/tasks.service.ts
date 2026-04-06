@@ -138,6 +138,7 @@ export class TasksService {
       projectName: task.project.name,
       currentStep: `Đang xử lý câu hỏi...`,
     });
+    this.realtimeService.executionStarted(task.id, task.title, task.agentType, task.projectId, task.project.name, `Đang suy nghĩ...`);
 
     // Save user message
     await this.prisma.message.create({
@@ -205,9 +206,13 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
     // Non-streaming response
     const enhancedPrompt = `${agent.systemPrompt}\n\n${projectContext}`;
     console.log(`[TasksService] Calling Ollama.chat()...`);
-    this.executionState.updateStep(taskId, `AI đang tìm câu trả lời...`);
+    // Emit both executionStep (for global notification) and modelThinking (for chat UI)
+    this.realtimeService.modelThinking(taskId, task.projectId, `Đang suy nghĩ...`, true);
+    this.executionState.updateStep(taskId, `AI đang phân tích...`);
+    this.realtimeService.executionStep(taskId, `AI đang phân tích...`);
     const response = await this.ollama.chat(ollamaMessages, enhancedPrompt);
     console.log(`[TasksService] Ollama returned ${response.length} chars`);
+    this.realtimeService.modelThinking(taskId, task.projectId, '', false);
 
     // Create and save agent message
     const agentMessage = await this.prisma.message.create({
@@ -229,6 +234,7 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
 
     // Complete execution tracking
     this.executionState.completeExecution(taskId, 'DONE');
+    this.realtimeService.executionCompleted(taskId);
 
     // Return updated history
     const updatedHistory = await this.prisma.message.findMany({

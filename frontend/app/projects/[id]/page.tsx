@@ -60,36 +60,57 @@ export default function ProjectDetailPage() {
   const [creating, setCreating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
-  const [analysisProjectId, setAnalysisProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'workflow'>('workflow');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [wsConnected, setWsConnected] = useState(false);
 
-  const fetchProjectData = useCallback(async () => {
-    if (!params.id) return;
-    try {
-      const [projectRes, chatRes] = await Promise.all([
-        projectsAPI.getOne(params.id as string),
-        projectsAPI.getProjectChat(params.id as string).catch(() => null),
-      ]);
-      setProject(projectRes.data);
-      setTeamChat(chatRes?.data || null);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error('Failed to fetch project', err);
-    }
-  }, [params.id]);
-
+  // Initial data fetch
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       router.push('/login');
       return;
     }
-    if (params.id) {
-      fetchProjectData();
+    
+    const id = params.id as string;
+    if (!id) return;
+    
+    // Fetch project data
+    Promise.all([
+      projectsAPI.getOne(id),
+      projectsAPI.getProjectChat(id).catch(() => null),
+    ]).then(([projectRes, chatRes]) => {
+      setProject(projectRes.data);
+      setTeamChat(chatRes?.data || null);
+      setLastUpdate(new Date());
+      setLoading(false);
+    }).catch((err) => {
+      console.error('Failed to fetch project', err);
+      setLoading(false);
+    });
+    
+    // Restore analysis state from localStorage
+    const savedAnalysis = localStorage.getItem(`analyzing_${id}`);
+    if (savedAnalysis) {
+      try {
+        const { analyzing: savedAnalyzing, analysisStep: savedStep } = JSON.parse(savedAnalysis);
+        if (savedAnalyzing) {
+          setAnalyzing(true);
+          setAnalysisStep(savedStep || 'Đang phân tích...');
+        }
+      } catch (e) {}
     }
-  }, [params.id, fetchProjectData, router]);
+  }, []); // Empty deps - only run on mount
+
+  // Persist analysis state to localStorage
+  useEffect(() => {
+    if (!params.id) return;
+    if (analyzing) {
+      localStorage.setItem(`analyzing_${params.id}`, JSON.stringify({ analyzing, analysisStep }));
+    } else {
+      localStorage.removeItem(`analyzing_${params.id}`);
+    }
+  }, [analyzing, analysisStep, params.id]);
 
   // WebSocket real-time updates
   useEffect(() => {
@@ -102,10 +123,26 @@ export default function ProjectDetailPage() {
     realtime.joinProject(params.id as string);
 
     const unsubTaskCreated = realtime.on('task:created', (data) => {
-      if (data.projectId === params.id) fetchProjectData();
+      if (data.projectId === params.id) {
+        // Refresh project data
+        projectsAPI.getOne(params.id as string).then((res) => {
+          setProject(res.data);
+          // Check if analysis is complete (tasks created)
+          const workTasks = res.data.tasks?.filter((t: any) => t.title !== 'Project Team Chat') || [];
+          if (workTasks.length > 0) {
+            // Analysis likely complete - clear analyzing state
+            setAnalyzing(false);
+            setAnalysisStep('');
+          }
+        });
+      }
     });
     const unsubTaskUpdated = realtime.on('task:updated', (data) => {
-      if (data.projectId === params.id) fetchProjectData();
+      if (data.projectId === params.id) {
+        projectsAPI.getOne(params.id as string).then((res) => {
+          setProject(res.data);
+        });
+      }
     });
     const unsubAnalysisProgress = realtime.on('analysis:progress', (data) => {
       if (data.projectId === params.id) {
@@ -113,11 +150,18 @@ export default function ProjectDetailPage() {
         setAnalyzing(data.status === 'progress');
       }
     });
-    const unsubAnalysisCompleted = realtime.on('analysis:completed', (data) => {
-      if (data.projectId === params.id) {
+    const unsubAnalysisCompleted = realtime.on('analysis:completed', (data: { projectId: string }) => {
+      // Clear analyzing state when any analysis completes
+      // Only for this project or if no projectId provided
+      if (!data.projectId || data.projectId === params.id) {
         setAnalyzing(false);
         setAnalysisStep('');
-        fetchProjectData();
+        // Refresh project data
+        if (params.id) {
+          projectsAPI.getOne(params.id as string).then((res) => {
+            setProject(res.data);
+          });
+        }
       }
     });
     const unsubConnect = realtime.on('connect' as any, () => setWsConnected(true));
@@ -132,7 +176,7 @@ export default function ProjectDetailPage() {
       unsubConnect();
       unsubDisconnect();
     };
-  }, [params.id, fetchProjectData]);
+  }, [params.id]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,12 +197,27 @@ export default function ProjectDetailPage() {
     if (!project) return;
     setAnalyzing(true);
     setAnalysisStep('Đang xóa dữ liệu cũ...');
+    
+    // Fallback: clear analyzing state after 2 minutes (timeout)
+    const timeout = setTimeout(() => {
+      setAnalyzing(false);
+      setAnalysisStep('');
+    }, 120000);
+    
     try {
-      projectsAPI.analyze(project.id);
+      await projectsAPI.analyze(project.id);
+      // Note: State will be cleared when analysis:completed event fires
+      // or when task:created events indicate completion
+      localStorage.setItem(`analyzing_${project.id}`, JSON.stringify({ 
+        analyzing: true, 
+        analysisStep: 'Đang xóa dữ liệu cũ...',
+        timeout 
+      }));
     } catch (err) {
       console.error('Failed to analyze', err);
       setAnalyzing(false);
       setAnalysisStep('');
+      clearTimeout(timeout);
     }
   };
 

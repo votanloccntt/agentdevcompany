@@ -55,8 +55,15 @@ export class ProjectSynthesisService implements OnModuleInit {
     };
   }
 
+  // Emit analysis started event immediately for notification
+  emitAnalysisStarted(projectId: string) {
+    console.log(`[Analysis] Emitting analysis:started for project ${projectId}`);
+    this.realtimeService.broadcast('analysis:started', { projectId });
+  }
+
   // Queue-based analysis - ensures sequential processing
   async analyzeAndRespond(projectId: string): Promise<any> {
+    console.log(`[Analysis Queue] Adding project ${projectId} to queue`);
     return new Promise((resolve, reject) => {
       // Add to queue
       this.analysisQueue.push({ projectId, resolve, reject });
@@ -70,10 +77,14 @@ export class ProjectSynthesisService implements OnModuleInit {
   }
 
   private async processQueue(): Promise<void> {
+    console.log(`[Analysis Queue] processQueue called. isProcessing=${this.isProcessing}, queue=${this.analysisQueue.length}`);
     if (this.isProcessing) return;
 
     const job = this.analysisQueue.shift();
-    if (!job) return;
+    if (!job) {
+      console.log(`[Analysis Queue] No job, returning`);
+      return;
+    }
 
     this.isProcessing = true;
     this.currentStep = 'Đang phân tích dự án...';

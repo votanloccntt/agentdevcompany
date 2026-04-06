@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Brain, ChevronDown, ChevronUp, Cpu } from 'lucide-react';
+import { realtime } from '@/lib/realtime';
 
 interface QueueItem {
   projectId: string;
@@ -21,54 +22,105 @@ interface ActiveExecution {
 }
 
 interface AnalysisNotificationProps {
+  /** Pass true when AI is actively processing (controls visibility) */
+  isProcessing?: boolean;
+  /** Pass current step text directly (controls step display) */
+  currentStep?: string;
   onClose?: () => void;
 }
 
-export default function AnalysisNotification({ onClose }: AnalysisNotificationProps) {
+export default function AnalysisNotification({
+  isProcessing: propProcessing,
+  currentStep: propStep,
+}: AnalysisNotificationProps) {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [activeExecutions, setActiveExecutions] = useState<ActiveExecution[]>([]);
-  const [currentStep, setCurrentStep] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentStep, setCurrentStep] = useState<string>(propStep ?? '');
+  const [isProcessing, setIsProcessing] = useState(propProcessing ?? false);
   const [isExpanded, setIsExpanded] = useState(true);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(propProcessing ?? false);
+
+  // Sync props → state so parent can control visibility directly
+  useEffect(() => {
+    if (propProcessing !== undefined) {
+      setIsProcessing(propProcessing);
+      if (propProcessing) setVisible(true);
+    }
+  }, [propProcessing]);
 
   useEffect(() => {
-    // Poll for queue status every 2 seconds
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/analysis-queue/status');
-        if (response.ok) {
-          const data = await response.json();
-          setIsProcessing(data.isProcessing || false);
-          setActiveExecutions(data.activeExecutions || []);
-          const hasQueue = data.queue && data.queue.length > 0;
-          const hasActiveExecutions = data.activeExecutions && data.activeExecutions.length > 0;
-          
-          // Show when there's a queue OR when AI is processing OR when there are active executions
-          if (hasQueue || data.isProcessing || hasActiveExecutions) {
-            setQueue(data.queue || []);
-            setCurrentStep(data.currentStep || 'Đang xử lý...');
-            setVisible(true);
-          } else if (visible) {
-            // Queue is empty and not processing, hide after 3 seconds
-            setTimeout(() => setVisible(false), 3000);
-          }
-        }
-      } catch (err) {
-        // Silently fail - notification is non-critical
+    if (propStep !== undefined) setCurrentStep(propStep);
+  }, [propStep]);
+
+  // Also listen to WebSocket events as a secondary source
+  useEffect(() => {
+    let hideTimer: NodeJS.Timeout | null = null;
+
+    const handleStarted = (data: { projectId: string }) => {
+      setIsProcessing(true);
+      setCurrentStep('Đang bắt đầu phân tích...');
+      setVisible(true);
+    };
+
+    const handleProgress = (data: { projectId: string; step: string; status: string }) => {
+      setIsProcessing(data.status === 'progress');
+      setCurrentStep(data.step);
+      setVisible(true);
+    };
+
+    const handleCompleted = (data: any) => {
+      setIsProcessing(false);
+      setActiveExecutions([]);
+      setQueue([]);
+      hideTimer = setTimeout(() => setVisible(false), 3000);
+    };
+
+    const handleTaskCreated = (data: { projectId: string }) => {
+      setVisible(true);
+    };
+
+    const handleModelThinking = (data: any) => {
+      console.log('[Notification] model:thinking event:', JSON.stringify(data));
+      if (data.thinking) {
+        setIsProcessing(true);
+        setCurrentStep(data.step || 'Đang suy nghĩ...');
+        setVisible(true);
+      } else {
+        setIsProcessing(false);
+        setCurrentStep('');
+        hideTimer = setTimeout(() => setVisible(false), 3000);
       }
-    }, 2000);
+    };
 
-    return () => clearInterval(interval);
-  }, [visible]);
+    if (!realtime.isConnected()) {
+      const token = localStorage.getItem('token');
+      realtime.connect(token || undefined);
+    }
 
-  if (!visible) return null;
+    realtime.on('analysis:started', handleStarted);
+    realtime.on('analysis:progress', handleProgress);
+    realtime.on('analysis:completed', handleCompleted);
+    realtime.on('task:created', handleTaskCreated);
+    realtime.on('model:thinking', handleModelThinking);
+
+    return () => {
+      realtime.off('analysis:started', handleStarted);
+      realtime.off('analysis:progress', handleProgress);
+      realtime.off('analysis:completed', handleCompleted);
+      realtime.off('task:created', handleTaskCreated);
+      realtime.off('model:thinking', handleModelThinking);
+      if (hideTimer) clearTimeout(hideTimer);
+    };
+  }, []);
+
+  // Don't render if nothing visible and no props controlling it
+  if (!visible && !isProcessing) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[100] animate-slide-in">
       <div className="bg-zinc-900 border border-indigo-500/50 rounded-xl shadow-2xl w-80 overflow-hidden">
         {/* Header */}
-        <div 
+        <div
           className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-950/80 to-transparent cursor-pointer hover:bg-zinc-800/50 transition-colors"
           onClick={() => setIsExpanded(!isExpanded)}
         >
@@ -82,10 +134,10 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
             <div>
               <p className="font-medium text-sm text-indigo-400">AI Analysis</p>
               <p className="text-xs text-zinc-400">
-                {activeExecutions.length > 0 
-                  ? `${activeExecutions.length} đang chạy` 
-                  : isProcessing 
-                    ? '⚡ Đang xử lý' 
+                {activeExecutions.length > 0
+                  ? `${activeExecutions.length} đang chạy`
+                  : isProcessing
+                    ? '⚡ Đang xử lý'
                     : `${queue.length} trong hàng đợi`}
               </p>
             </div>
@@ -100,6 +152,17 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
         {/* Content */}
         {isExpanded && (
           <div className="px-4 py-3 border-t border-zinc-800">
+            {/* Current Step */}
+            {isProcessing && currentStep && (
+              <div className="mb-3">
+                <p className="text-xs text-zinc-500 mb-1">Đang xử lý:</p>
+                <p className="text-sm text-white font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse-slow" />
+                  {currentStep}
+                </p>
+              </div>
+            )}
+
             {/* Active Executions */}
             {activeExecutions.length > 0 && (
               <div className="mb-3">
@@ -128,17 +191,6 @@ export default function AnalysisNotification({ onClose }: AnalysisNotificationPr
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Current Step (for queue processing) */}
-            {(isProcessing && activeExecutions.length === 0) && (
-              <div className="mb-3">
-                <p className="text-xs text-zinc-500 mb-1">Đang xử lý:</p>
-                <p className="text-sm text-white font-medium flex items-center gap-2">
-                  <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse-slow" />
-                  {currentStep || 'Đang chờ...'}
-                </p>
               </div>
             )}
 

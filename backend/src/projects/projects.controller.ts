@@ -37,12 +37,23 @@ export class ProjectsController {
   async create(@Body() dto: CreateProjectDto, @Request() req) {
     const project = await this.projectsService.create(dto.name, dto.description, req.user.id);
     
+    console.log(`[Project Controller] Created project ${project.id}, analyze: ${dto.analyze}`);
+    
+    // Emit project created event for notifications
+    this.projectsService.notifyProjectCreated(project);
+    
     // Tự động phân tích và tạo tasks cho team
     if (dto.analyze !== false) {
+      console.log(`[Project Controller] Starting analysis for project ${project.id}`);
+      // Emit analysis started event immediately for notification
+      this.synthesisService.emitAnalysisStarted(project.id);
+      
       // Chạy async để không blocking response
       this.synthesisService.analyzeAndRespond(project.id).catch(err => {
         console.error('Auto analysis failed:', err);
       });
+    } else {
+      console.log(`[Project Controller] Skipping analysis for project ${project.id} (analyze=false)`);
     }
     
     return project;

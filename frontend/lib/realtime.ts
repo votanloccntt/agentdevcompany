@@ -6,9 +6,16 @@ export type RealtimeEvent =
   | 'task:created'
   | 'task:updated'
   | 'chat:message'
+  | 'analysis:started'
   | 'analysis:progress'
   | 'analysis:completed'
+  | 'project:created'
   | 'project:updated'
+  | 'model:thinking'
+  | 'execution:started'
+  | 'execution:step'
+  | 'execution:completed'
+  | 'execution:error'
   | 'pong';
 
 export interface TaskCreatedPayload {
@@ -37,6 +44,33 @@ export interface AnalysisCompletedPayload {
   projectId: string;
   tasks: any[];
   analysis: string;
+}
+
+export interface ModelThinkingPayload {
+  taskId: string;
+  projectId: string;
+  thinking: boolean;
+  step: string;
+}
+
+export interface ExecutionStartedPayload {
+  taskId: string;
+  taskTitle: string;
+  agentType: string;
+  projectId: string;
+  projectName: string;
+  status: 'RUNNING' | 'DONE' | 'ERROR';
+  startedAt: number;
+  currentStep: string;
+}
+
+export interface ExecutionStepPayload {
+  taskId: string;
+  step: string;
+}
+
+export interface ExecutionCompletedPayload {
+  taskId: string;
 }
 
 type EventCallback<T = any> = (data: T) => void;
@@ -95,9 +129,16 @@ class RealtimeService {
       'task:created',
       'task:updated',
       'chat:message',
+      'analysis:started',
       'analysis:progress',
       'analysis:completed',
+      'project:created',
       'project:updated',
+      'model:thinking',
+      'execution:started',
+      'execution:step',
+      'execution:completed',
+      'execution:error',
     ];
 
     events.forEach(event => {

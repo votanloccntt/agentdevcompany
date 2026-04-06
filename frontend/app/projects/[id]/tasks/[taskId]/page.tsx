@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Send, Bot, User as UserIcon, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { tasksAPI } from "@/lib/api";
+import { realtime } from "@/lib/realtime";
 
 const AGENT_COLORS: Record<string, string> = {
   PM: "#3b82f6",
@@ -23,6 +24,8 @@ export default function TaskChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [modelThinking, setModelThinking] = useState(false);
+  const [modelStep, setModelStep] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,6 +42,64 @@ export default function TaskChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!params.taskId) return;
+
+    if (!realtime.isConnected()) {
+      const token = localStorage.getItem("token");
+      realtime.connect(token || undefined);
+    }
+
+    // Join project room so we receive model:thinking broadcasts
+    if (params.id) {
+      realtime.joinProject(params.id as string);
+    }
+    realtime.joinTask(params.taskId as string);
+
+    const handleChatMessage = (data: { taskId: string; message: any }) => {
+      if (data.taskId === params.taskId) {
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === data.message.id);
+          if (exists) return prev;
+          return [...prev, data.message];
+        });
+        setSending(false);
+      }
+    };
+
+    const handleModelThinking = (data: { taskId: string; thinking: boolean; step: string }) => {
+      if (data.taskId === params.taskId) {
+        setModelThinking(data.thinking);
+        setModelStep(data.step || "");
+      }
+    };
+
+    const handleExecutionStep = (data: { taskId: string; step: string }) => {
+      if (data.taskId === params.taskId) {
+        // Update model step to show current execution step
+        setModelStep(data.step || "");
+        setModelThinking(true); // Ensure we know it's still processing
+      }
+    };
+
+    realtime.on("chat:message", handleChatMessage);
+    realtime.on("model:thinking", handleModelThinking);
+    realtime.on("execution:step", handleExecutionStep);
+
+    return () => {
+      if (params.id) {
+        realtime.leaveProject(params.id as string);
+      }
+      if (params.taskId) {
+        realtime.leaveTask(params.taskId as string);
+      }
+      realtime.off("chat:message", handleChatMessage);
+      realtime.off("model:thinking", handleModelThinking);
+      realtime.off("execution:step", handleExecutionStep);
+    };
+  }, [params.taskId, params.id]);
 
   const fetchTask = async (id: string) => {
     try {
@@ -59,7 +120,6 @@ export default function TaskChatPage() {
     setInput("");
     setSending(true);
 
-    // Add user message immediately
     const userMsg = {
       role: "USER",
       content: userMessage,
@@ -200,7 +260,7 @@ export default function TaskChatPage() {
               <div className="max-w-[80%] rounded-2xl px-4 py-3 bg-zinc-800">
                 <span className="animate-pulse text-zinc-400 flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Đang xử lý...
+                  {modelStep || "Đang xử lý..."}
                 </span>
               </div>
             </div>
