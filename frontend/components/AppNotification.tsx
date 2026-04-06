@@ -59,6 +59,7 @@ class NotificationManager {
   }
 
   private createEventId(type: string, id: string): string {
+    // Create an ID that combines type and content
     return `${type}:${id}:${Date.now()}`;
   }
 
@@ -188,9 +189,6 @@ class NotificationManager {
   }
 
   onAnalysisStarted(data: { projectId: string; projectName?: string }) {
-    const eventId = this.createEventId('analysis-started', data.projectId);
-    if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
-    
     // Check if this project is already in the queue to avoid duplicates
     const existingQueueItem = this.queue.find(q => q.projectId === data.projectId);
     if (existingQueueItem) {
