@@ -31,6 +31,20 @@ class NotificationManager {
   private wsConnected = false;
   private eventHistory: Set<string> = new Set(); // Prevent duplicate processing
 
+  private getExecutions(): ActiveExecution[] {
+    return Array.from(this.activeExecutions.values());
+  }
+
+  setConnected(connected: boolean) {
+    this.wsConnected = connected;
+    if (!connected) {
+      // Clear all on disconnect
+      this.activeExecutions.clear();
+      this.queue = [];
+      this.emit();
+    }
+  }
+
   subscribe(callback: (execs: ActiveExecution[], queue: QueueItem[]) => void) {
     this.listeners.add(callback);
     // Immediately call with current state
@@ -61,36 +75,15 @@ class NotificationManager {
     return true;
   }
 
-  subscribe(callback: (execs: ActiveExecution[], queue: QueueItem[]) => void) {
-    this.listeners.add(callback);
-    // Immediately call with current state
-    callback(this.getExecutions(), this.queue);
-    return () => this.listeners.delete(callback);
-  }
-
-  private emit() {
-    const execs = this.getExecutions();
-    const q = this.queue;
-    this.listeners.forEach(cb => cb(execs, q));
-  }
-
-  private getExecutions(): ActiveExecution[] {
-    return Array.from(this.activeExecutions.values());
-  }
-
-  setConnected(connected: boolean) {
-    this.wsConnected = connected;
-    if (!connected) {
-      // Clear all on disconnect
-      this.activeExecutions.clear();
-      this.queue = [];
-      this.emit();
-    }
-  }
-
   onExecutionStarted(data: ActiveExecution) {
     const eventId = this.createEventId('execution-started', data.taskId);
     if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
+    
+    // Update queue item with project name if it exists but doesn't have name yet
+    const queueItem = this.queue.find(q => q.projectId === data.projectId);
+    if (queueItem && !queueItem.projectName) {
+      queueItem.projectName = data.projectName;
+    }
     
     this.activeExecutions.set(data.taskId, data);
     // Remove from queue if it was there
@@ -126,6 +119,9 @@ class NotificationManager {
   }
 
   onExecutionError(taskId: string) {
+    const eventId = this.createEventId('execution-error', taskId);
+    if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
+    
     const exec = this.activeExecutions.get(taskId);
     if (exec) {
       exec.status = 'ERROR';
@@ -137,7 +133,6 @@ class NotificationManager {
     }
   }
 
-  // Handle model:thinking from task chat (simple thinking without full execution)
   // Handle model:thinking from task chat (simple thinking without full execution)
   onModelThinking(data: { taskId: string; projectId: string; thinking: boolean; step: string }) {
     const eventId = this.createEventId('model-thinking', `${data.taskId}-${data.thinking}`);
@@ -202,6 +197,17 @@ class NotificationManager {
     if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
     
     if (data.status === 'progress') {
+      // Update queue item with project name if it exists but doesn't have name yet
+      const queueItem = this.queue.find(q => q.projectId === data.projectId);
+      if (queueItem && !queueItem.projectName && data.step.includes('Project')) {
+        // Extract project name from step if available
+        // This is a heuristic - in practice, you might want to pass project name explicitly
+        const projectNameMatch = data.step.match(/Project\s+([^\s]+)/);
+        if (projectNameMatch) {
+          queueItem.projectName = projectNameMatch[1];
+        }
+      }
+      
       // Move from queue to active
       this.queue = this.queue.filter(q => q.projectId !== data.projectId);
       // Find or create execution for this project
