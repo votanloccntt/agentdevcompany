@@ -85,6 +85,15 @@ class NotificationManager {
       queueItem.projectName = data.projectName;
     }
     
+    // Check if this execution is already in activeExecutions to avoid duplicates
+    const existingExecution = this.activeExecutions.get(data.taskId);
+    if (existingExecution) {
+      // Update existing execution instead of creating new one
+      Object.assign(existingExecution, data);
+      this.emit();
+      return;
+    }
+    
     this.activeExecutions.set(data.taskId, data);
     // Remove from queue if it was there
     this.queue = this.queue.filter(q => q.projectId !== data.projectId);
@@ -181,6 +190,16 @@ class NotificationManager {
   onAnalysisStarted(data: { projectId: string; projectName?: string }) {
     const eventId = this.createEventId('analysis-started', data.projectId);
     if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
+    
+    // Check if this project is already in the queue to avoid duplicates
+    const existingQueueItem = this.queue.find(q => q.projectId === data.projectId);
+    if (existingQueueItem) {
+      // Update the existing item with new information if available
+      if (data.projectName && !existingQueueItem.projectName) {
+        existingQueueItem.projectName = data.projectName;
+      }
+      return; // Don't add duplicate
+    }
     
     // Add to queue as pending
     this.queue.push({
