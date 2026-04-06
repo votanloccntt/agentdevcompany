@@ -270,6 +270,9 @@ function getManager(): NotificationManager {
   return globalManager;
 }
 
+// Export the manager for external use
+export { getManager, type ActiveExecution, type QueueItem };
+
 // ============ React Component ============
 
 export default function AppNotification() {

@@ -73,6 +73,8 @@ export const agentsAPI = {
   getOne: (type: string) => api.get(`/agents/${type}`),
   chat: (agentType: string, message: string) =>
     api.post("/agents/chat", { agentType, message }),
+  chatWithProject: (message: string, agentType: string, projectId: string) =>
+    api.post("/agents/chat", { message, agentType, projectId }),
   chatStream: (agentType: string, message: string) =>
     api.post(
       "/agents/chat/stream",

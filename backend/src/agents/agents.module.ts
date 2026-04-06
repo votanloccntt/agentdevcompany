@@ -4,6 +4,8 @@ import { PassportModule } from '@nestjs/passport';
 import { AgentsController } from './agents.controller';
 import { AgentsService } from './agents.service';
 import { OllamaService } from '../ollama/ollama.service';
+import { CollaborationService } from './collaboration.service';
+import { PrismaService } from '../prisma.service';
 
 @Module({
   imports: [
@@ -13,6 +15,7 @@ import { OllamaService } from '../ollama/ollama.service';
     }),
   ],
   controllers: [AgentsController],
-  providers: [AgentsService, OllamaService],
+  providers: [AgentsService, OllamaService, CollaborationService, PrismaService],
+  exports: [AgentsService, CollaborationService],
 })
 export class AgentsModule {}

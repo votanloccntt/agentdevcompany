@@ -5,7 +5,9 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Send, Bot, User, Brain, Loader2 } from "lucide-react";
 import { projectsAPI } from "@/lib/api";
+import { agentsAPI } from "@/lib/api";
 import { realtime } from "@/lib/realtime";
+import { getManager } from "@/components/AppNotification";
 
 const AGENT_INFO: Record<
   string,
@@ -46,7 +48,7 @@ const AGENT_INFO: Record<
 
 interface Message {
   id: string;
-  role: "USER" | "AGENT";
+  role: "USER" | "AGENT" | "COLLABORATION" | "ERROR" | "PM" | "CODING" | "QA" | "UX" | "DATA" | string;
   content: string;
   createdAt: string;
 }
@@ -81,6 +83,141 @@ export default function TeamChatPage() {
     }
   }, [params.id]);
 
+  // Memoized callback for sending messages
+  const handleSend = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const userMessage = input.trim();
+    setInput("");
+
+    // Add user message immediately
+    const userMsg = {
+      id: `temp-${Date.now()}`,
+      role: "USER",
+      content: userMessage,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    // Show notification that agents are discussing
+    const notificationManager = getManager();
+    const taskId = `team-chat-${params.id}-${Date.now()}`;
+    
+    notificationManager.onModelThinking({
+      taskId,
+      projectId: params.id as string,
+      thinking: true,
+      step: "Các agent đang thảo luận...",
+    });
+
+    try {
+      // Get token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      
+      // Use agents/collaboration endpoint for multi-agent interaction
+      const response = await fetch('http://localhost:5000/api/agents/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }), // Only add auth header if token exists
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          agentType: 'PM', // Use PM as default for team chat
+          projectId: params.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Update notification to completed
+      notificationManager.onModelThinking({
+        taskId,
+        projectId: params.id as string,
+        thinking: false,
+        step: "Hoàn tất thảo luận",
+      });
+      
+      // Handle both regular and collaboration responses
+      if (data.discussionLog) {
+        // This is a collaboration response with discussion log
+        const discussionMessages = [];
+        
+        // Add individual agent responses from discussion log
+        for (const discussion of data.discussionLog) {
+          const agentMsg = {
+            id: `agent-${discussion.sender}-${Date.now()}-${Math.random()}`,
+            role: discussion.sender, // Use actual agent type
+            content: discussion.content,
+            createdAt: discussion.timestamp || new Date().toISOString(),
+          };
+          discussionMessages.push(agentMsg);
+        }
+        
+        // Add final consensus
+        const finalMsg = {
+          id: `collab-${Date.now()}`,
+          role: "COLLABORATION",
+          content: `🔄 Quyết định hợp tác:\n${data.finalSolution}`,
+          createdAt: new Date().toISOString(),
+        };
+        
+        setMessages((prev) => [...prev, ...discussionMessages, finalMsg]);
+      } else if (data.finalSolution) {
+        // This is a collaboration response without discussion log
+        const agentMsg = {
+          id: `collab-${Date.now()}`,
+          role: "COLLABORATION",
+          content: `🔄 Quyết định hợp tác:\n${data.finalSolution}`,
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, agentMsg]);
+      } else {
+        // This is a regular agent response
+        const agentMsg = {
+          id: `agent-${Date.now()}`,
+          role: "AGENT",
+          content: data.content || data.message || 'No response',
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, agentMsg]);
+      }
+    } catch (err) {
+      // Update notification to show error
+      const notificationManager = getManager();
+      notificationManager.onModelThinking({
+        taskId,
+        projectId: params.id as string,
+        thinking: false,
+        step: "Lỗi xử lý yêu cầu",
+      });
+      
+      console.error("Failed to send message", err);
+      const errorMsg = {
+        id: `error-${Date.now()}`,
+        role: "ERROR",
+        content: `Xin lỗi, đã xảy ra lỗi: ${err.message || 'Lỗi không xác định'}. Vui lòng đảm bảo Ollama đang chạy và máy chủ backend hoạt động. Nếu bạn chưa đăng nhập, vui lòng đăng nhập trước khi sử dụng chat.`,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setSending(false);
+    }
+  }, [input, sending, params.id]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(e);
+    }
+  }, [handleSend]);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -114,7 +251,7 @@ export default function TeamChatPage() {
       }
     });
 
-    const unsubAnalysisProgress = realtime.on("analysis:progress", (data: { projectId: string; step: string; status: string }) => {
+    const unsubAnalysisProgress = realtime.on("analysis:progress", (data: { projectId: string; step: string; status: "started" | "progress" | "completed" | "error" }) => {
       if (data.projectId === params.id) {
         setModelStep(data.step);
         setModelThinking(data.status === "progress");
@@ -148,29 +285,6 @@ export default function TeamChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [loading]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || sending) return;
-    setSending(true);
-    const userMessage = input.trim();
-    setInput("");
-
-    try {
-      await projectsAPI.projectChat(params.id as string, userMessage);
-    } catch (err) {
-      console.error("Failed to send message", err);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend(e);
-    }
-  };
 
   if (loading) {
     return (
@@ -216,6 +330,80 @@ export default function TeamChatPage() {
 
             {messages.map((msg, index) => {
               const agentInfo = AGENT_INFO[msg.role] || AGENT_INFO.AGENT;
+
+              // Handle different message types
+              if (msg.role === "COLLABORATION") {
+                return (
+                  <div key={msg.id || index} className="flex gap-4">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-500/20">
+                      <Brain className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-gradient-to-r from-purple-900/50 to-transparent border border-purple-500/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Brain className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold text-purple-300">Quyết định hợp tác</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{msg.content.replace('🔄 Quyết định hợp tác:\n', '')}</p>
+                      <p className="text-xs mt-2 opacity-60">
+                        {new Date(msg.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Handle agent-specific messages
+              if (["PM", "CODING", "QA", "UX", "DATA"].includes(msg.role)) {
+                const agentSpecificInfo = AGENT_INFO[msg.role] || {
+                  name: msg.role,
+                  color: "#a855f7",
+                  bgColor: "rgba(168, 85, 247, 0.2)",
+                };
+
+                return (
+                  <div key={msg.id || index} className="flex gap-4">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: agentSpecificInfo.bgColor }}
+                    >
+                      <Bot
+                        className="w-4 h-4"
+                        style={{ color: agentSpecificInfo.color }}
+                      />
+                    </div>
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium" style={{ color: agentSpecificInfo.color }}>
+                          {agentSpecificInfo.name}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <p className="text-xs mt-1 opacity-60">
+                        {new Date(msg.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Handle error messages
+              if (msg.role === "ERROR") {
+                return (
+                  <div key={msg.id || index} className="flex gap-4 flex-row-reverse">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-red-500">
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-red-900/50 border border-red-500/30">
+                      <p className="text-sm text-red-200 whitespace-pre-wrap">{msg.content}</p>
+                      <p className="text-xs mt-1 opacity-60 text-red-400">
+                        {new Date(msg.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Handle regular messages
               return (
                 <div
                   key={msg.id || index}
@@ -247,6 +435,13 @@ export default function TeamChatPage() {
                         : "bg-zinc-800"
                     }`}
                   >
+                    <div className="flex items-center gap-2 mb-1">
+                      {msg.role === "AGENT" && (
+                        <span className="text-xs font-medium" style={{ color: agentInfo.color }}>
+                          {agentInfo.name}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     <p className="text-xs mt-1 opacity-60">
                       {new Date(msg.createdAt).toLocaleTimeString()}
@@ -263,7 +458,7 @@ export default function TeamChatPage() {
                 <div className="max-w-[85%] rounded-2xl px-4 py-3 bg-zinc-800">
                   <span className="animate-pulse text-zinc-400 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {modelStep || "AI Team đang xử lý..."}
+                    {modelStep || "Các agent đang thảo luận..."}
                   </span>
                 </div>
               </div>
