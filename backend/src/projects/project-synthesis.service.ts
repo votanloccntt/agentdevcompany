@@ -528,8 +528,8 @@ Format một cách tự nhiên như một cuộc thảo luận nhóm.`;
         continue;
       }
       
-      // Detect task header
-      if (line.match(/^###\s*Task\s*\d+/i)) {
+      // Detect task header - match both ### Task and #### Task
+      if (line.match(/^#{3,4}\s*Task\s*\d+/i)) {
         // Process previous task if exists
         if (currentSection.trim()) {
           const parsed = this.parseSingleTask(currentSection, currentStage, currentStageOrder, currentParallelGroup);
@@ -573,8 +573,8 @@ Format một cách tự nhiên như một cuộc thảo luận nhóm.`;
     defaultStageOrder: number,
     defaultParallelGroup: string | null
   ): ParsedTask | null {
-    // Trích xuất tên task
-    const titleMatch = section.match(/###\s*Task\s*\d+:?\s*([^\n-]+)/i);
+    // Trích xuất tên task - hỗ trợ ### Task và #### Task
+    const titleMatch = section.match(/#+\s*Task\s*\d+:?\s*([^\n-]+)/i);
     if (!titleMatch) return null;
     
     const title = titleMatch[1].trim();
@@ -622,7 +622,7 @@ Format một cách tự nhiên như một cuộc thảo luận nhóm.`;
     if (descMatch) {
       description = descMatch[1].trim();
     } else {
-      const rest = section.replace(/###\s*Task\s*\d+:?\s*[^\n]+/i, '').trim();
+      const rest = section.replace(/#+\s*Task\s*\d+:?\s*[^\n]+/i, '').trim();
       description = rest.slice(0, 200);
     }
     
