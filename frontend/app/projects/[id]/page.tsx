@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare, Users, Brain, Sparkles, TrendingUp, Target, LayoutGrid, List } from 'lucide-react';
+import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare, Users, Brain, Sparkles, TrendingUp, Target, LayoutGrid, List, RefreshCw } from 'lucide-react';
 import { projectsAPI, tasksAPI } from '@/lib/api';
 import WorkflowBoard from '@/components/WorkflowBoard';
+import { realtime } from '@/lib/realtime';
 
 const AGENT_COLORS: Record<string, string> = {
   PM: '#3b82f6',
@@ -61,6 +62,23 @@ export default function ProjectDetailPage() {
   const [analysisStep, setAnalysisStep] = useState<string>('');
   const [analysisProjectId, setAnalysisProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'workflow'>('workflow');
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [wsConnected, setWsConnected] = useState(false);
+
+  const fetchProjectData = useCallback(async () => {
+    if (!params.id) return;
+    try {
+      const [projectRes, chatRes] = await Promise.all([
+        projectsAPI.getOne(params.id as string),
+        projectsAPI.getProjectChat(params.id as string).catch(() => null),
+      ]);
+      setProject(projectRes.data);
+      setTeamChat(chatRes?.data || null);
+      setLastUpdate(new Date());
+    } catch (err) {
+      console.error('Failed to fetch project', err);
+    }
+  }, [params.id]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -69,24 +87,52 @@ export default function ProjectDetailPage() {
       return;
     }
     if (params.id) {
-      fetchProject(params.id as string);
+      fetchProjectData();
     }
-  }, [params.id]);
+  }, [params.id, fetchProjectData, router]);
 
-  const fetchProject = async (id: string) => {
-    try {
-      const [projectRes, chatRes] = await Promise.all([
-        projectsAPI.getOne(id),
-        projectsAPI.getProjectChat(id).catch(() => null),
-      ]);
-      setProject(projectRes.data);
-      setTeamChat(chatRes?.data || null);
-    } catch (err) {
-      console.error('Failed to fetch project', err);
-    } finally {
-      setLoading(false);
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!params.id) return;
+
+    if (!realtime.isConnected()) {
+      const token = localStorage.getItem('token');
+      realtime.connect(token || undefined);
     }
-  };
+    realtime.joinProject(params.id as string);
+
+    const unsubTaskCreated = realtime.on('task:created', (data) => {
+      if (data.projectId === params.id) fetchProjectData();
+    });
+    const unsubTaskUpdated = realtime.on('task:updated', (data) => {
+      if (data.projectId === params.id) fetchProjectData();
+    });
+    const unsubAnalysisProgress = realtime.on('analysis:progress', (data) => {
+      if (data.projectId === params.id) {
+        setAnalysisStep(data.step);
+        setAnalyzing(data.status === 'progress');
+      }
+    });
+    const unsubAnalysisCompleted = realtime.on('analysis:completed', (data) => {
+      if (data.projectId === params.id) {
+        setAnalyzing(false);
+        setAnalysisStep('');
+        fetchProjectData();
+      }
+    });
+    const unsubConnect = realtime.on('connect' as any, () => setWsConnected(true));
+    const unsubDisconnect = realtime.on('disconnect' as any, () => setWsConnected(false));
+
+    return () => {
+      realtime.leaveProject(params.id as string);
+      unsubTaskCreated();
+      unsubTaskUpdated();
+      unsubAnalysisProgress();
+      unsubAnalysisCompleted();
+      unsubConnect();
+      unsubDisconnect();
+    };
+  }, [params.id, fetchProjectData]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +142,6 @@ export default function ProjectDetailPage() {
       setShowCreate(false);
       setNewTitle('');
       setNewDesc('');
-      fetchProject(project.id);
     } catch (err) {
       console.error('Failed to create task', err);
     } finally {
@@ -106,33 +151,14 @@ export default function ProjectDetailPage() {
 
   const handleReanalyze = async () => {
     if (!project) return;
-    
     setAnalyzing(true);
-    setAnalysisProjectId(project.id);
     setAnalysisStep('Đang xóa dữ liệu cũ...');
-    
     try {
-      // Step 1: Clear old data
-      await projectsAPI.analyze(project.id);
-      
-      // Step 2: Wait for PM analysis to complete
-      setAnalysisStep('PM Agent đang phân tích dự án...');
-      
-      // Wait a bit for the analysis to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setAnalysisStep('Đang tạo tasks mới...');
-      await fetchProject(project.id);
-      
-      setAnalysisStep('Hoàn tất!');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      projectsAPI.analyze(project.id);
     } catch (err) {
       console.error('Failed to analyze', err);
-      setAnalysisStep('Đã xảy ra lỗi');
-    } finally {
       setAnalyzing(false);
       setAnalysisStep('');
-      setAnalysisProjectId(null);
     }
   };
 

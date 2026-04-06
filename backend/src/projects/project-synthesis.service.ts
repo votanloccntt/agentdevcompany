@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { OllamaService } from "../ollama/ollama.service";
 import { PrismaService } from "../prisma.service";
 import { ExecutionStateService } from "../execution-state/execution-state.service";
+import { RealTimeService } from "../realtime/real-time.service";
 import { AgentType, Stage } from "@prisma/client";
 
 interface ParsedTask {
@@ -33,6 +34,7 @@ export class ProjectSynthesisService implements OnModuleInit {
     private ollama: OllamaService,
     private prisma: PrismaService,
     private executionState: ExecutionStateService,
+    private realtimeService: RealTimeService,
   ) {}
 
   onModuleInit() {
@@ -199,6 +201,7 @@ Hãy đảm bảo:
 
     try {
       this.currentStep = 'Đang xóa dữ liệu cũ...';
+      this.realtimeService.analysisProgress(projectId, 'Đang xóa dữ liệu cũ...', 'progress');
       // ========== XÓA DỮ LIỆU CŨ NHƯNG GIỮ LẠI TEAM CHAT ==========
       // Tìm và xóa các task cũ (KHÔNG phải team chat)
       const oldTasks = await this.prisma.task.findMany({
@@ -219,6 +222,7 @@ Hãy đảm bảo:
       console.log(`[Analysis] Cleared ${oldTasks.length} old tasks (kept Team Chat) for project ${projectId}`);
       
       this.currentStep = 'PM Agent đang phân tích...';
+      this.realtimeService.analysisProgress(projectId, 'PM Agent đang phân tích...', 'progress');
 
       // Gọi PM Agent để phân tích và tạo tasks
       const response = await this.ollama.chat(
@@ -230,6 +234,7 @@ Hãy đảm bảo:
       const parsedTasks = this.parseTasksFromResponse(response);
 
       this.currentStep = `Đang tạo ${parsedTasks.length} tasks...`;
+      this.realtimeService.analysisProgress(projectId, `Đang tạo ${parsedTasks.length} tasks...`, 'progress');
 
       // Tìm hoặc tạo mới Team Chat - KHÔNG xóa message cũ
       let teamChat = await this.prisma.task.findFirst({
@@ -278,6 +283,14 @@ Hãy đảm bảo:
         });
         createdTasks.push(task);
       }
+
+      // Emit task created events for each task
+      for (const task of createdTasks) {
+        this.realtimeService.taskCreated(projectId, task);
+      }
+
+      // Emit analysis completed
+      this.realtimeService.analysisCompleted(projectId, createdTasks, response);
 
       console.log(`[Analysis Queue] Completed re-analysis for project ${projectId}. Created ${createdTasks.length} new tasks.`);
 

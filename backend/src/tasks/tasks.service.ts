@@ -7,6 +7,7 @@ import { PrismaService } from "../prisma.service";
 import { OllamaService } from "../ollama/ollama.service";
 import { AGENT_PROMPTS, AgentType } from "../agents/prompts";
 import { ExecutionStateService } from "../execution-state/execution-state.service";
+import { RealTimeService } from "../realtime/real-time.service";
 import { Task, Status, Stage } from "@prisma/client";
 
 @Injectable()
@@ -15,6 +16,7 @@ export class TasksService {
     private prisma: PrismaService,
     private ollama: OllamaService,
     private executionState: ExecutionStateService,
+    private realtimeService: RealTimeService,
   ) {}
 
   async findAll(projectId: string, userId: string): Promise<Task[]> {
@@ -91,7 +93,7 @@ export class TasksService {
       throw new ForbiddenException("Access denied");
     }
 
-    return this.prisma.task.create({
+    const created = await this.prisma.task.create({
       data: {
         title,
         description,
@@ -103,7 +105,17 @@ export class TasksService {
         parallelGroup,
         parentTaskId,
       },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+        },
+      },
     });
+
+    // Emit via WebSocket
+    this.realtimeService.taskCreated(projectId, created);
+
+    return created;
   }
 
   async chat(
@@ -206,6 +218,9 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
       },
     });
 
+    // Emit chat message via WebSocket
+    this.realtimeService.chatMessage(task.projectId, taskId, agentMessage);
+
     // Update task status
     await this.prisma.task.update({
       where: { id: taskId },
@@ -230,9 +245,14 @@ Hãy phản hồi BẰNG TIẾNG VIỆT. Khi trả lời, hãy lưu ý:
     userId: string,
   ): Promise<Task> {
     const task = await this.findOne(taskId, userId);
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: { status },
     });
+    
+    // Emit task update via WebSocket
+    this.realtimeService.taskUpdated(task.projectId, updated);
+    
+    return updated;
   }
 }

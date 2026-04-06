@@ -9,6 +9,7 @@ import { AgentsModule } from './agents/agents.module';
 import { OllamaModule } from './ollama/ollama.module';
 import { TestModule } from './test/test.module';
 import { ExecutionStateModule } from './execution-state/execution-state.module';
+import { RealTimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ExecutionStateModule } from './execution-state/execution-state.module';
     OllamaModule,
     TestModule,
     ExecutionStateModule,
+    RealTimeModule,
   ],
 })
 export class AppModule {}
