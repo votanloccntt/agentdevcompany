@@ -46,7 +46,7 @@ export class ProjectsController {
     if (dto.analyze !== false) {
       console.log(`[Project Controller] Starting analysis for project ${project.id}`);
       // Emit analysis started event immediately for notification
-      this.synthesisService.emitAnalysisStarted(project.id);
+      this.synthesisService.emitAnalysisStarted(project.id, project.name);
       
       // Chạy async để không blocking response
       this.synthesisService.analyzeAndRespond(project.id).catch(err => {

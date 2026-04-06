@@ -17,6 +17,7 @@ export interface ActiveExecution {
 
 interface QueueItem {
   projectId: string;
+  projectName?: string; // Optional, will be filled later if available
   timestamp: number;
   step: string;
 }
@@ -182,13 +183,14 @@ class NotificationManager {
     }
   }
 
-  onAnalysisStarted(data: { projectId: string }) {
+  onAnalysisStarted(data: { projectId: string; projectName?: string }) {
     const eventId = this.createEventId('analysis-started', data.projectId);
     if (!this.addEventToHistory(eventId)) return; // Skip if duplicate
     
     // Add to queue as pending
     this.queue.push({
       projectId: data.projectId,
+      projectName: data.projectName, // Use project name if provided
       timestamp: Date.now(),
       step: 'Đang chờ phân tích...',
     });
@@ -478,9 +480,11 @@ export default function AppNotification() {
                   {queue.map((item, index) => (
                     <div key={item.projectId} className="flex items-center gap-2 text-xs bg-zinc-800/30 rounded-lg px-3 py-2">
                       <span className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-yellow-400 animate-pulse' : 'bg-zinc-600'}`} />
-                      <span className="text-zinc-300">Project {item.projectId.slice(-6)}</span>
+                      <span className="text-zinc-300">
+                        {item.projectName ? item.projectName : `Project ${item.projectId.slice(-6)}`}
+                      </span>
                       <span className="text-zinc-500 ml-auto">
-                        {Math.floor((Date.now() - item.timestamp) / 1000)}s
+                        {Math.floor((timestamp - item.timestamp) / 1000)}s
                       </span>
                     </div>
                   ))}

@@ -56,9 +56,9 @@ export class ProjectSynthesisService implements OnModuleInit {
   }
 
   // Emit analysis started event immediately for notification
-  emitAnalysisStarted(projectId: string) {
+  emitAnalysisStarted(projectId: string, projectName?: string) {
     console.log(`[Analysis] Emitting analysis:started for project ${projectId}`);
-    this.realtimeService.broadcast('analysis:started', { projectId });
+    this.realtimeService.broadcast('analysis:started', { projectId, projectName });
   }
 
   // Queue-based analysis - ensures sequential processing
