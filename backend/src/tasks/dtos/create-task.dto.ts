@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsEnum } from 'class-validator';
-import { AgentType } from '@prisma/client';
+import { AgentType, Stage } from '@prisma/client';
 
 export class CreateTaskDto {
   @IsString()
@@ -11,4 +11,19 @@ export class CreateTaskDto {
 
   @IsEnum(AgentType)
   agentType: AgentType;
+
+  @IsEnum(Stage)
+  @IsOptional()
+  stage?: Stage;
+
+  @IsOptional()
+  stageOrder?: number;
+
+  @IsString()
+  @IsOptional()
+  parallelGroup?: string;
+
+  @IsString()
+  @IsOptional()
+  parentTaskId?: string;
 }

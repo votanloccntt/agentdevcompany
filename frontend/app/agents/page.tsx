@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -55,6 +55,14 @@ const AGENTS = [
 ];
 
 export default function AgentsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><div className="text-zinc-400">Loading...</div></div>}>
+      <AgentsPageContent />
+    </Suspense>
+  );
+}
+
+function AgentsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedAgent, setSelectedAgent] = useState<any>(null);

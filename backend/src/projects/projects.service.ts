@@ -30,7 +30,10 @@ export class ProjectsService {
               take: 1,
             },
           },
-          orderBy: { updatedAt: 'desc' },
+          orderBy: [
+            { stage: 'asc' },
+            { stageOrder: 'asc' },
+          ],
         },
       },
     });
@@ -62,6 +65,68 @@ export class ProjectsService {
       where: { id: project.id },
       data: { name, description },
     });
+  }
+
+  async getWorkflow(id: string, userId: string) {
+    const project = await this.findOne(id, userId);
+
+    // Get all tasks organized by stage
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId: id },
+      include: {
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        subtasks: true,
+      },
+      orderBy: [
+        { stage: 'asc' },
+        { stageOrder: 'asc' },
+      ],
+    });
+
+    // Filter out team chat for workflow
+    const workTasks = tasks.filter(t => t.title !== 'Project Team Chat');
+
+    // Group by stage
+    const stages = ['PLANNING', 'DESIGN', 'DEVELOPMENT', 'TESTING', 'DEPLOYMENT', 'MAINTENANCE'] as const;
+    const workflow: Record<string, any> = {};
+
+    for (const stage of stages) {
+      const stageTasks = workTasks.filter(t => t.stage === stage);
+      if (stageTasks.length === 0) continue;
+
+      // Group by parallelGroup
+      const parallelGroups: Record<string, any[]> = {};
+      const standaloneTasks: any[] = [];
+
+      for (const task of stageTasks) {
+        if (task.parallelGroup) {
+          if (!parallelGroups[task.parallelGroup]) {
+            parallelGroups[task.parallelGroup] = [];
+          }
+          parallelGroups[task.parallelGroup].push(task);
+        } else {
+          standaloneTasks.push(task);
+        }
+      }
+
+      workflow[stage] = {
+        tasks: stageTasks,
+        parallelGroups: Object.entries(parallelGroups).map(([groupId, tasks]) => ({
+          groupId,
+          tasks,
+        })),
+        standaloneTasks,
+      };
+    }
+
+    return {
+      project,
+      workflow,
+      stages,
+    };
   }
 
   async remove(id: string, userId: string): Promise<void> {

@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare, Users, Brain, Sparkles, TrendingUp, Target } from 'lucide-react';
+import { ArrowLeft, Plus, Bug, Clock, CheckCircle2, XCircle, MessageSquare, Users, Brain, Sparkles, TrendingUp, Target, LayoutGrid, List } from 'lucide-react';
 import { projectsAPI, tasksAPI } from '@/lib/api';
+import WorkflowBoard from '@/components/WorkflowBoard';
 
 const AGENT_COLORS: Record<string, string> = {
   PM: '#3b82f6',
@@ -59,6 +60,7 @@ export default function ProjectDetailPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
   const [analysisProjectId, setAnalysisProjectId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'workflow'>('workflow');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -420,65 +422,95 @@ export default function ProjectDetailPage() {
           </Link>
         </div>
 
-        {/* Regular Tasks */}
-        <div className="flex items-center justify-between mb-4">
+        {/* View Mode Toggle */}
+        <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-medium">Tasks</h2>
-        </div>
-
-        {regularTasks.length === 0 ? (
-          <div className="card text-center py-12">
-            <MessageSquare className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
-            <h2 className="text-xl font-medium mb-2">No Tasks Yet</h2>
-            <p className="text-zinc-400 mb-6">Create a task to chat with a specific agent</p>
+          <div className="flex gap-2 bg-zinc-800 rounded-lg p-1">
             <button
-              onClick={() => setShowCreate(true)}
-              className="btn-primary inline-flex items-center gap-2"
+              onClick={() => setViewMode('workflow')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === 'workflow'
+                  ? 'bg-indigo-500 text-white'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
             >
-              <Plus className="w-4 h-4" />
-              Create Task
+              <LayoutGrid className="w-4 h-4" />
+              Workflow
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-indigo-500 text-white'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              List
             </button>
           </div>
+        </div>
+
+        {viewMode === 'workflow' ? (
+          <WorkflowBoard projectId={project.id} projectName={project.name} />
         ) : (
-          <div className="space-y-4">
-            {regularTasks.map((task: any) => {
-              const StatusIcon = STATUS_ICONS[task.status] || Clock;
-              const lastMsg = task.messages?.[task.messages.length - 1];
-              
-              return (
-                <Link
-                  key={task.id}
-                  href={`/projects/${project.id}/tasks/${task.id}`}
-                  className="card hover:border-zinc-700 transition-all duration-200 block"
+          <>
+            {regularTasks.length === 0 ? (
+              <div className="card text-center py-12">
+                <MessageSquare className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
+                <h2 className="text-xl font-medium mb-2">No Tasks Yet</h2>
+                <p className="text-zinc-400 mb-6">Create a task to chat with a specific agent</p>
+                <button
+                  onClick={() => setShowCreate(true)}
+                  className="btn-primary inline-flex items-center gap-2"
                 >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: `${AGENT_COLORS[task.agentType] || '#6366f1'}20` }}
+                  <Plus className="w-4 h-4" />
+                  Create Task
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {regularTasks.map((task: any) => {
+                  const StatusIcon = STATUS_ICONS[task.status] || Clock;
+                  const lastMsg = task.messages?.[task.messages.length - 1];
+                  
+                  return (
+                    <Link
+                      key={task.id}
+                      href={`/projects/${project.id}/tasks/${task.id}`}
+                      className="card hover:border-zinc-700 transition-all duration-200 block"
                     >
-                      <span
-                        className="text-sm font-bold"
-                        style={{ color: AGENT_COLORS[task.agentType] || '#6366f1' }}
-                      >
-                        {task.agentType}
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium mb-1">{task.title}</h3>
-                      {lastMsg && (
-                        <p className="text-zinc-400 text-sm line-clamp-1">
-                          {lastMsg.content.slice(0, 100)}...
-                        </p>
-                      )}
-                    </div>
-                    <div className={`flex items-center gap-2 ${STATUS_COLORS[task.status]}`}>
-                      <StatusIcon className="w-4 h-4" />
-                      <span className="text-sm">{task.status.replace('_', ' ')}</span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center"
+                          style={{ backgroundColor: `${AGENT_COLORS[task.agentType] || '#6366f1'}20` }}
+                        >
+                          <span
+                            className="text-sm font-bold"
+                            style={{ color: AGENT_COLORS[task.agentType] || '#6366f1' }}
+                          >
+                            {task.agentType}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-medium mb-1">{task.title}</h3>
+                          {lastMsg && (
+                            <p className="text-zinc-400 text-sm line-clamp-1">
+                              {lastMsg.content.slice(0, 100)}...
+                            </p>
+                          )}
+                        </div>
+                        <div className={`flex items-center gap-2 ${STATUS_COLORS[task.status]}`}>
+                          <StatusIcon className="w-4 h-4" />
+                          <span className="text-sm">{task.status.replace('_', ' ')}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </main>
 

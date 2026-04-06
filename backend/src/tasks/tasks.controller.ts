@@ -20,7 +20,17 @@ export class TasksController {
     @Body() dto: CreateTaskDto,
     @Request() req,
   ) {
-    return this.tasksService.create(projectId, dto.title, dto.description, dto.agentType, req.user.id);
+    return this.tasksService.create(
+      projectId,
+      dto.title,
+      dto.description,
+      dto.agentType,
+      req.user.id,
+      dto.stage,
+      dto.stageOrder,
+      dto.parallelGroup,
+      dto.parentTaskId,
+    );
   }
 
   @Get('tasks/:id')

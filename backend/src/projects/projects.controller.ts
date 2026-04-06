@@ -110,6 +110,12 @@ export class ProjectsController {
     return this.synthesisService.analyzeAndRespond(id);
   }
 
+  // Get workflow board for project
+  @Get(':id/workflow')
+  async getWorkflow(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getWorkflow(id, req.user.id);
+  }
+
   // Get analysis queue status
   @Get('analysis-queue/status')
   async getQueueStatus() {

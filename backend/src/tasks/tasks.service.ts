@@ -7,7 +7,7 @@ import { PrismaService } from "../prisma.service";
 import { OllamaService } from "../ollama/ollama.service";
 import { AGENT_PROMPTS, AgentType } from "../agents/prompts";
 import { ExecutionStateService } from "../execution-state/execution-state.service";
-import { Task, Status } from "@prisma/client";
+import { Task, Status, Stage } from "@prisma/client";
 
 @Injectable()
 export class TasksService {
@@ -37,8 +37,12 @@ export class TasksService {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        subtasks: true,
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { stage: 'asc' },
+        { stageOrder: 'asc' },
+      ],
     });
   }
 
@@ -70,6 +74,10 @@ export class TasksService {
     description: string | null,
     agentType: AgentType,
     userId: string,
+    stage: Stage = Stage.PLANNING,
+    stageOrder: number = 0,
+    parallelGroup: string | null = null,
+    parentTaskId: string | null = null,
   ): Promise<Task> {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -90,6 +98,10 @@ export class TasksService {
         agentType,
         projectId,
         status: "PENDING",
+        stage,
+        stageOrder,
+        parallelGroup,
+        parentTaskId,
       },
     });
   }

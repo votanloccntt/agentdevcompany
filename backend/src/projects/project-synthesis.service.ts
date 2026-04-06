@@ -2,13 +2,16 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import { OllamaService } from "../ollama/ollama.service";
 import { PrismaService } from "../prisma.service";
 import { ExecutionStateService } from "../execution-state/execution-state.service";
-import { AgentType } from "@prisma/client";
+import { AgentType, Stage } from "@prisma/client";
 
 interface ParsedTask {
   title: string;
   agentType: AgentType;
   description: string;
   priority?: string;
+  stage?: Stage;
+  stageOrder?: number;
+  parallelGroup?: string;
 }
 
 // Queue item interface
@@ -144,32 +147,55 @@ Hãy phản hồi BẰNG TIẾNG VIỆT theo format sau:
 
 ## Kế hoạch công việc
 
-### Task 1: [Tên công việc cụ thể]
+### Stage: PLANNING (Giai đoạn 1 - Lập kế hoạch)
+
+#### Task 1: [Tên công việc cụ thể]
 - Agent: [CODING/QA/UX/DATA/PM]
 - Mô tả: [Mô tả chi tiết công việc cần làm]
 - Ưu tiên: [Cao/Trung bình/Thấp]
+- Stage: PLANNING
+- StageOrder: 1
+- ParallelGroup: [group-id] (để trống nếu task độc lập)
 
-### Task 2: [Tên công việc cụ thể]
+#### Task 2: [Tên công việc cụ thể]
 - Agent: [CODING/QA/UX/DATA/PM]
 - Mô tả: [Mô tả chi tiết công việc cần làm]
 - Ưu tiên: [Cao/Trung bình/Thấp]
+- Stage: PLANNING
+- StageOrder: 2
+- ParallelGroup: [group-id]
 
-[Liệt kê tất cả các công việc cần thiết, bao gồm:]
-- Database design & setup
-- Backend API development
-- Frontend development
-- Testing (unit, integration, E2E)
-- UX research & design
-- CI/CD setup
-- Documentation
-- Code review
-- v.v.
+### Stage: DESIGN (Giai đoạn 2 - Thiết kế)
+
+#### Task 3: [Tên công việc cụ thể]
+- Agent: [CODING/QA/UX/DATA/PM]
+- Mô tả: [Mô tả chi tiết công việc cần làm]
+- Ưu tiên: [Cao/Trung bình/Thấp]
+- Stage: DESIGN
+- StageOrder: 1
+- ParallelGroup: [group-id]
+
+### Stage: DEVELOPMENT (Giai đoạn 3 - Phát triển)
+
+#### Task 4: [Tên công việc cụ thể]
+- Agent: [CODING/QA/UX/DATA/PM]
+- Mô tả: [Mô tả chi tiết công việc cần làm]
+- Ưu tiên: [Cao/Trung bình/Thấp]
+- Stage: DEVELOPMENT
+- StageOrder: 1
+- ParallelGroup: [group-id]
+
+### Stage: TESTING (Giai đoạn 4 - Kiểm thử)
+
+### Stage: DEPLOYMENT (Giai đoạn 5 - Triển khai)
 
 Hãy đảm bảo:
 - Mỗi task có mô tả rõ ràng, actionable
 - Các task được sắp xếp theo thứ tự ưu tiên
 - Phân công hợp lý cho từng agent
-- Cân bằng khối lượng work giữa các agents`;
+- Cân bằng khối lượng work giữa các agents
+- Tasks chạy song song (VD: design UI + setup database) nên có cùng StageOrder và ParallelGroup
+- Các giai đoạn: PLANNING → DESIGN → DEVELOPMENT → TESTING → DEPLOYMENT`;
 
     try {
       this.currentStep = 'Đang xóa dữ liệu cũ...';
@@ -244,6 +270,9 @@ Hãy đảm bảo:
             agentType: taskData.agentType,
             projectId: projectId,
             status: "PENDING",
+            stage: taskData.stage || Stage.PLANNING,
+            stageOrder: taskData.stageOrder || 0,
+            parallelGroup: taskData.parallelGroup,
           },
           include: { messages: { orderBy: { createdAt: "asc" } } },
         });
@@ -478,54 +507,49 @@ Format một cách tự nhiên như một cuộc thảo luận nhóm.`;
 
   private parseTasksFromResponse(response: string): ParsedTask[] {
     const tasks: ParsedTask[] = [];
+    let currentStage: Stage = Stage.PLANNING;
+    let currentStageOrder = 0;
+    let currentParallelGroup: string | null = null;
     
-    // Tìm tất cả các task blocks - hỗ trợ nhiều formats
-    // Tách response thành các phần dựa trên header ### Task
-    const sections = response.split(/(?=###\s*Task\s*\d+)/i);
+    // Tách response thành các phần dựa trên header ### Task hoặc ### Stage
+    const lines = response.split('\n');
+    let currentSection = '';
     
-    for (const section of sections) {
-      if (!section.includes('###')) continue;
-      
-      // Trích xuất tên task
-      const titleMatch = section.match(/###\s*Task\s*\d+:?\s*([^\n-]+)/i);
-      if (!titleMatch) continue;
-      
-      const title = titleMatch[1].trim();
-      
-      // Trích xuất agent type
-      let agentType: AgentType = 'CODING'; // default
-      const agentMatch = section.match(/Agent:?:?\s*(\w+)/i);
-      if (agentMatch) {
-        const agentStr = agentMatch[1].trim().toUpperCase();
-        if (['CODING', 'QA', 'UX', 'DATA', 'PM'].includes(agentStr)) {
-          agentType = agentStr as AgentType;
+    for (const line of lines) {
+      // Detect stage header
+      const stageMatch = line.match(/###\s*Stage:\s*(\w+)/i);
+      if (stageMatch) {
+        const stageStr = stageMatch[1].trim().toUpperCase();
+        if (['PLANNING', 'DESIGN', 'DEVELOPMENT', 'TESTING', 'DEPLOYMENT', 'MAINTENANCE'].includes(stageStr)) {
+          currentStage = stageStr as Stage;
+          currentStageOrder = 0;
+          currentParallelGroup = null;
         }
+        continue;
       }
       
-      // Trích xuất mô tả
-      let description = '';
-      const descMatch = section.match(/Mô tả:?:?\s*([^\n-]+)/i);
-      if (descMatch) {
-        description = descMatch[1].trim();
-      } else {
-        const rest = section.replace(/###\s*Task\s*\d+:?\s*[^\n]+/i, '').trim();
-        description = rest.slice(0, 200);
+      // Detect task header
+      if (line.match(/^###\s*Task\s*\d+/i)) {
+        // Process previous task if exists
+        if (currentSection.trim()) {
+          const parsed = this.parseSingleTask(currentSection, currentStage, currentStageOrder, currentParallelGroup);
+          if (parsed) {
+            tasks.push(parsed);
+            currentStageOrder++;
+          }
+        }
+        currentSection = line + '\n';
+        continue;
       }
       
-      // Trích xuất ưu tiên
-      let priority = '';
-      const priorityMatch = section.match(/Ưu tiên:?:?\s*(\w+)/i);
-      if (priorityMatch) {
-        priority = priorityMatch[1].trim();
-      }
-      
-      if (title && description) {
-        tasks.push({
-          title,
-          agentType,
-          description: `${description}${priority ? ` (Ưu tiên: ${priority})` : ''}`,
-          priority,
-        });
+      currentSection += line + '\n';
+    }
+    
+    // Process last task
+    if (currentSection.trim()) {
+      const parsed = this.parseSingleTask(currentSection, currentStage, currentStageOrder, currentParallelGroup);
+      if (parsed) {
+        tasks.push(parsed);
       }
     }
 
@@ -535,9 +559,88 @@ Format một cách tự nhiên như một cuộc thảo luận nhóm.`;
         title: 'Phân tích và lên kế hoạch dự án',
         agentType: 'PM',
         description: response.slice(0, 500),
+        stage: Stage.PLANNING,
+        stageOrder: 0,
       });
     }
 
     return tasks;
+  }
+
+  private parseSingleTask(
+    section: string,
+    defaultStage: Stage,
+    defaultStageOrder: number,
+    defaultParallelGroup: string | null
+  ): ParsedTask | null {
+    // Trích xuất tên task
+    const titleMatch = section.match(/###\s*Task\s*\d+:?\s*([^\n-]+)/i);
+    if (!titleMatch) return null;
+    
+    const title = titleMatch[1].trim();
+    
+    // Trích xuất agent type
+    let agentType: AgentType = 'CODING';
+    const agentMatch = section.match(/Agent:?:?\s*(\w+)/i);
+    if (agentMatch) {
+      const agentStr = agentMatch[1].trim().toUpperCase();
+      if (['CODING', 'QA', 'UX', 'DATA', 'PM'].includes(agentStr)) {
+        agentType = agentStr as AgentType;
+      }
+    }
+    
+    // Trích xuất stage
+    let stage = defaultStage;
+    const stageMatch = section.match(/Stage:?:?\s*(\w+)/i);
+    if (stageMatch) {
+      const stageStr = stageMatch[1].trim().toUpperCase();
+      if (['PLANNING', 'DESIGN', 'DEVELOPMENT', 'TESTING', 'DEPLOYMENT', 'MAINTENANCE'].includes(stageStr)) {
+        stage = stageStr as Stage;
+      }
+    }
+    
+    // Trích xuất stageOrder
+    let stageOrder = defaultStageOrder;
+    const orderMatch = section.match(/StageOrder:?:?\s*(\d+)/i);
+    if (orderMatch) {
+      stageOrder = parseInt(orderMatch[1], 10);
+    }
+    
+    // Trích xuất parallelGroup
+    let parallelGroup: string | null = defaultParallelGroup;
+    const groupMatch = section.match(/ParallelGroup:?:?\s*([\w-]+)/i);
+    if (groupMatch) {
+      const groupStr = groupMatch[1].trim();
+      if (groupStr && groupStr !== '') {
+        parallelGroup = groupStr;
+      }
+    }
+    
+    // Trích xuất mô tả
+    let description = '';
+    const descMatch = section.match(/Mô tả:?:?\s*([^\n-]+)/i);
+    if (descMatch) {
+      description = descMatch[1].trim();
+    } else {
+      const rest = section.replace(/###\s*Task\s*\d+:?\s*[^\n]+/i, '').trim();
+      description = rest.slice(0, 200);
+    }
+    
+    // Trích xuất ưu tiên
+    let priority = '';
+    const priorityMatch = section.match(/Ưu tiên:?:?\s*(\w+)/i);
+    if (priorityMatch) {
+      priority = priorityMatch[1].trim();
+    }
+    
+    return {
+      title,
+      agentType,
+      description: `${description}${priority ? ` (Ưu tiên: ${priority})` : ''}`,
+      priority,
+      stage,
+      stageOrder,
+      parallelGroup,
+    };
   }
 }

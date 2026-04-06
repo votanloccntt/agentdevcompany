@@ -51,6 +51,7 @@ export const projectsAPI = {
   projectChatStream: (id: string, message: string) =>
     api.post(`/projects/${id}/chat/stream`, { message }, { responseType: 'stream' }),
   analyze: (id: string) => api.post(`/projects/${id}/analyze`),
+  getWorkflow: (id: string) => api.get(`/projects/${id}/workflow`),
 };
 
 export const tasksAPI = {
